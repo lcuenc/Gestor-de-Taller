@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Gestión de Activos — Taller"
+version = "1.0.0"
+id = "artifacts/taller"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24530
+
+[services.development]
+run = "pnpm --filter @workspace/taller run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/taller", "run", "build" ]
+publicDir = "artifacts/taller/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24530"
+BASE_PATH = "/"
