@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { getGetTallerStateQueryOptions, useSaveTallerState } from "@workspace/api-client-react";
 
-const STORAGE_KEY = "MDS_TALLER_PROD";
 const PASSWORD = "Movimiento2026*";
 
 const DEFAULT_TECNICOS = [
@@ -1238,15 +1239,8 @@ export default function App() {
   });
   const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [gpvList, setGpvList] = useState<GPVEntry[]>([]);
-  const [tecnicos, setTecnicos] = useState<string[]>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return DEFAULT_TECNICOS;
-      const d = JSON.parse(raw);
-      return d.tecnicos || DEFAULT_TECNICOS;
-    } catch { return DEFAULT_TECNICOS; }
-  });
-  const [loading, setLoading] = useState(true);
+  const [tecnicos, setTecnicos] = useState<string[]>(DEFAULT_TECNICOS);
+  const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [collapsed, setCol] = useState(false);
   const [search, setSearch] = useState("");
@@ -1255,30 +1249,35 @@ export default function App() {
   const [modalE, setModalE] = useState<Equipo | null>(null);
   const [confirmState, setConfirm] = useState<{ source: string; item: Equipo | GPVEntry; msg: string } | null>(null);
   const [showTecModal, setShowTecModal] = useState(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const save = useCallback((eq: Equipo[], gv: GPVEntry[], tecs?: string[]) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        equipos: eq,
-        gpvList: gv,
-        tecnicos: tecs ?? tecnicos,
-      }));
-    } catch (e) { console.error(e); }
-  }, [tecnicos]);
+  const { data: apiState, isLoading: apiLoading } = useQuery({
+    ...getGetTallerStateQueryOptions(),
+    enabled: auth,
+  });
+  const { mutate: saveToApi } = useSaveTallerState();
 
   useEffect(() => {
-    if (!auth) { setLoading(false); return; }
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const d = JSON.parse(raw);
-        setEquipos((d.equipos || []).map(normalizeEquipo));
-        setGpvList(d.gpvList || []);
-        setTecnicos(d.tecnicos || DEFAULT_TECNICOS);
-      }
-    } catch (e) { console.error(e); }
-    setLoading(false);
+    if (!auth || !apiState || loaded) return;
+    setEquipos((apiState.equipos as Equipo[]).map(normalizeEquipo));
+    setGpvList(apiState.gpvList as GPVEntry[]);
+    setTecnicos((apiState.tecnicos as string[]).length > 0 ? apiState.tecnicos as string[] : DEFAULT_TECNICOS);
+    setLoaded(true);
+  }, [auth, apiState, loaded]);
+
+  useEffect(() => {
+    if (!auth) setLoaded(false);
   }, [auth]);
+
+  const loading = auth && (apiLoading || !loaded);
+
+  const save = useCallback((eq: Equipo[], gv: GPVEntry[], tecs?: string[]) => {
+    const techList = tecs ?? tecnicos;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveToApi({ data: { equipos: eq as never[], gpvList: gv as never[], tecnicos: techList } });
+    }, 600);
+  }, [tecnicos, saveToApi]);
 
   const toast = useCallback((msg: string, type = "ok") => {
     const id = Date.now();

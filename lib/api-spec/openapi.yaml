@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: taller
+    description: Taller state operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /taller/state:
+    get:
+      operationId: getTallerState
+      tags: [taller]
+      summary: Get full taller state
+      description: Returns equipos, gpvList, and tecnicos
+      responses:
+        "200":
+          description: Current state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TallerState"
+    put:
+      operationId: saveTallerState
+      tags: [taller]
+      summary: Save full taller state
+      description: Upserts the full state (equipos, gpvList, tecnicos)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TallerStateInput"
+      responses:
+        "200":
+          description: Saved state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TallerState"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +69,94 @@ components:
       required:
         - status
 
+    Equipo:
+      type: object
+      properties:
+        id:          { type: number }
+        destino:     { type: string }
+        modelo:      { type: string }
+        interno:     { type: string }
+        accesorio:   { type: string }
+        cliente:     { type: string }
+        fechaIngreso: { type: string }
+        falla:       { type: string }
+        estado:      { type: string }
+        tecnicos:
+          type: array
+          items: { type: string }
+        observacion: { type: string }
+        prioridad:   { type: string }
+        enVentaDesde:
+          type: ["string", "null"]
+      required:
+        - id
+        - destino
+        - modelo
+        - interno
+        - accesorio
+        - cliente
+        - fechaIngreso
+        - falla
+        - estado
+        - tecnicos
+        - observacion
+        - prioridad
+
+    GPVEntry:
+      type: object
+      properties:
+        id:           { type: number }
+        modelo:       { type: string }
+        interno:      { type: string }
+        cliente:      { type: string }
+        fechaEntrega: { type: string }
+        observacion:  { type: string }
+        estado:       { type: string }
+      required:
+        - id
+        - modelo
+        - interno
+        - cliente
+        - fechaEntrega
+        - observacion
+        - estado
+
+    TallerState:
+      type: object
+      properties:
+        equipos:
+          type: array
+          items:
+            $ref: "#/components/schemas/Equipo"
+        gpvList:
+          type: array
+          items:
+            $ref: "#/components/schemas/GPVEntry"
+        tecnicos:
+          type: array
+          items: { type: string }
+        updatedAt:
+          type: ["string", "null"]
+      required:
+        - equipos
+        - gpvList
+        - tecnicos
+
+    TallerStateInput:
+      type: object
+      properties:
+        equipos:
+          type: array
+          items:
+            $ref: "#/components/schemas/Equipo"
+        gpvList:
+          type: array
+          items:
+            $ref: "#/components/schemas/GPVEntry"
+        tecnicos:
+          type: array
+          items: { type: string }
+      required:
+        - equipos
+        - gpvList
+        - tecnicos
