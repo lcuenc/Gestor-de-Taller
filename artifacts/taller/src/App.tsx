@@ -121,6 +121,9 @@ const P: Record<string, string> = {
   sortDesc:  "M3 18h18M7 12h10M11 6h4",
   sort:      "M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4",
   pencil:    "M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z",
+  bar:       "M18 20V10M12 20V4M6 20v-6",
+  sync:      "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15",
+  kpi:       "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
 };
 
 function Ico({ n, s = 16, c = "currentColor" }: { n: string; s?: number; c?: string }) {
@@ -226,6 +229,18 @@ html,body,#root{margin:0;padding:0;width:100%;height:100%;overflow:hidden;backgr
 .app .tinf{border-left:3px solid var(--bl)}
 .app .ibox{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.18);border-radius:var(--r);padding:9px 13px;font-size:12px;color:var(--t2);line-height:1.5}
 .app .empty{padding:32px;text-align:center;color:var(--t3);font-size:13px}
+.app .sync-dot{width:6px;height:6px;border-radius:50%;background:var(--em);animation:pulse 1.4s ease-in-out infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:.3;transform:scale(.85)}50%{opacity:1;transform:scale(1)}}
+.app .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.app .kpi-card{background:var(--bg2);border:1px solid var(--bo);border-radius:var(--r2);padding:16px;border-top:3px solid}
+.app .kpi-val{font-size:32px;font-weight:800;line-height:1;margin-bottom:4px}
+.app .kpi-lbl{font-size:11px;color:var(--t3);line-height:1.4}
+.app .kpi-sub{font-size:11px;font-weight:600;margin-top:4px}
+.app .bar-row{display:flex;align-items:center;gap:10px;padding:5px 0}
+.app .bar-bg{flex:1;height:6px;background:var(--bo);border-radius:99px;overflow:hidden}
+.app .bar-fill{height:100%;border-radius:99px;transition:width .4s}
+.app .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.app .grid22{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .app .sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .app .ri{display:flex;align-items:center;gap:11px;padding:8px 16px;border-bottom:1px solid var(--bo)}
 .app .ri:last-child{border-bottom:none}
@@ -1232,6 +1247,245 @@ function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, on
   );
 }
 
+// ── KPIsPage ──────────────────────────────────────────────────
+function MiniBar({ value, max, color }: { value: number; max: number; color: string }) {
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  return (
+    <div className="bar-bg">
+      <div className="bar-fill" style={{ width: `${pct}%`, background: color }} />
+    </div>
+  );
+}
+
+function KPIsPage({ equipos, gpvList }: { equipos: Equipo[]; gpvList: GPVEntry[] }) {
+  const activos = equipos.filter(e => ESTADOS_ACTIVOS.has(e.estado));
+  const total = equipos.length;
+
+  const byEstado = [...ESTADOS_TALLER, ESTADO_LISTO].map(s => ({
+    s, count: equipos.filter(e => e.estado === s).length,
+    color: ST[s]?.color || "var(--t3)",
+  }));
+  const maxByEstado = Math.max(1, ...byEstado.map(x => x.count));
+
+  const alquiler = activos.filter(e => e.destino === "alquiler").length;
+  const venta    = activos.filter(e => e.destino === "venta").length;
+  const totalA   = alquiler + venta || 1;
+
+  const prioRojo     = activos.filter(e => e.prioridad === "rojo").length;
+  const prioAmarillo = activos.filter(e => e.prioridad === "amarillo").length;
+  const prioNinguna  = activos.filter(e => e.prioridad === "ninguna" || !e.prioridad).length;
+
+  const ageBuckets = [
+    { label: "0-7 días",   count: activos.filter(e => dDesde(e.fechaIngreso) < 7).length,                                              color: "#10b981" },
+    { label: "7-14 días",  count: activos.filter(e => dDesde(e.fechaIngreso) >= 7  && dDesde(e.fechaIngreso) < 14).length,             color: "#3b82f6" },
+    { label: "14-30 días", count: activos.filter(e => dDesde(e.fechaIngreso) >= 14 && dDesde(e.fechaIngreso) < 30).length,             color: "#f59e0b" },
+    { label: "+30 días",   count: activos.filter(e => dDesde(e.fechaIngreso) >= 30).length,                                            color: "#ef4444" },
+  ];
+  const maxAge = Math.max(1, ...ageBuckets.map(b => b.count));
+
+  const avgTotal = activos.length
+    ? Math.round(activos.reduce((a, e) => a + dDesde(e.fechaIngreso), 0) / activos.length)
+    : 0;
+
+  const bottlenecks = [...activos]
+    .sort((a, b) => dDesde(b.fechaIngreso) - dDesde(a.fechaIngreso))
+    .slice(0, 6);
+
+  const modelMap: Record<string, number> = {};
+  activos.forEach(e => { modelMap[e.modelo] = (modelMap[e.modelo] || 0) + 1; });
+  const topModels = Object.entries(modelMap).sort((a, b) => b[1] - a[1]).slice(0, 7);
+  const maxModel = Math.max(1, ...topModels.map(([, c]) => c));
+
+  const gpvVigentes   = gpvList.filter(g => g.fechaEntrega && dGPV(g.fechaEntrega) > 0).length;
+  const gpvPorVencer  = gpvList.filter(g => g.fechaEntrega && dGPV(g.fechaEntrega) > 0 && dGPV(g.fechaEntrega) <= 15).length;
+  const gpvVencidas   = gpvList.filter(g => g.fechaEntrega && dGPV(g.fechaEntrega) <= 0).length;
+  const gpvTotal      = gpvList.length;
+
+  const avgByEstado = [...ESTADOS_TALLER, ESTADO_LISTO].map(s => {
+    const items = equipos.filter(e => e.estado === s && e.fechaIngreso);
+    const avg = items.length ? Math.round(items.reduce((a, e) => a + dDesde(e.fechaIngreso), 0) / items.length) : 0;
+    return { s, avg, count: items.length, color: ST[s]?.color || "var(--t3)" };
+  }).filter(x => x.count > 0);
+  const maxAvg = Math.max(1, ...avgByEstado.map(x => x.avg));
+
+  const Card = ({ val, lbl, color, sub }: { val: number | string; lbl: string; color: string; sub?: string }) => (
+    <div className="kpi-card" style={{ borderTopColor: color }}>
+      <div className="kpi-val" style={{ color }}>{val}</div>
+      <div className="kpi-lbl">{lbl}</div>
+      {sub && <div className="kpi-sub" style={{ color }}>{sub}</div>}
+    </div>
+  );
+
+  return (
+    <div>
+      <div className="sh">
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "var(--t)" }}>KPIs — Equipos</div>
+          <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 1 }}>Indicadores de rendimiento operativo · {total} equipo{total !== 1 ? "s" : ""} registrados</div>
+        </div>
+      </div>
+
+      <div className="kpi-grid">
+        <Card val={activos.length} lbl="En proceso de reparación" color="var(--bl)" />
+        <Card val={avgTotal + "d"} lbl="Promedio de días en taller" color={avgTotal > 20 ? "var(--ro)" : avgTotal > 10 ? "var(--am)" : "var(--em)"} />
+        <Card val={prioRojo} lbl="Prioridad alta (urgentes)" color="var(--ro)" sub={prioRojo > 0 ? "Requieren atención" : "Sin urgentes ✓"} />
+        <Card val={gpvPorVencer} lbl="GPV próximas a vencer" color={gpvPorVencer > 0 ? "var(--am)" : "var(--em)"} sub={`de ${gpvTotal} en cartera`} />
+        <Card val={gpvVencidas} lbl="GPV vencidas" color={gpvVencidas > 0 ? "var(--ro)" : "var(--t3)"} />
+        <Card val={`${alquiler}/${venta}`} lbl="Alquiler / Venta activos" color="var(--pu)" sub={venta > 0 ? `${Math.round(venta/totalA*100)}% venta` : "100% alquiler"} />
+      </div>
+
+      <div className="grid22" style={{ marginBottom: 14 }}>
+        <div className="tw">
+          <div className="th"><Ico n="bar" s={14} c="var(--bl)" /><span className="tt">Distribución por estado</span></div>
+          <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: 3 }}>
+            {byEstado.map(({ s, count, color }) => (
+              <div key={s} className="bar-row">
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: "var(--t2)", width: 170, flexShrink: 0 }}>{s}</span>
+                <MiniBar value={count} max={maxByEstado} color={color} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: count > 0 ? color : "var(--t3)", minWidth: 22, textAlign: "right" }}>{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="tw">
+          <div className="th"><Ico n="clock" s={14} c="var(--am)" /><span className="tt">Antigüedad en taller</span></div>
+          <div style={{ padding: "10px 16px" }}>
+            {ageBuckets.map(({ label, count, color }) => (
+              <div key={label} className="bar-row">
+                <span style={{ fontSize: 12, color: "var(--t2)", width: 90, flexShrink: 0 }}>{label}</span>
+                <MiniBar value={count} max={maxAge} color={color} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: count > 0 ? color : "var(--t3)", minWidth: 22, textAlign: "right" }}>{count}</span>
+              </div>
+            ))}
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--bo)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: "var(--t3)" }}>Promedio general</span>
+              <span style={{ fontSize: 18, fontWeight: 800, color: avgTotal > 20 ? "var(--ro)" : avgTotal > 10 ? "var(--am)" : "var(--em)" }}>{avgTotal}d</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid3" style={{ marginBottom: 14 }}>
+        <div className="tw">
+          <div className="th"><Ico n="alert" s={14} c="var(--ro)" /><span className="tt">Prioridades</span></div>
+          <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+            {[
+              { label: "Alta", count: prioRojo, color: "var(--ro)", bg: "rgba(239,68,68,.1)" },
+              { label: "Media", count: prioAmarillo, color: "var(--am)", bg: "rgba(245,158,11,.1)" },
+              { label: "Sin prioridad", count: prioNinguna, color: "var(--t3)", bg: "var(--bg3)" },
+            ].map(({ label, count, color, bg }) => (
+              <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: "var(--r)", background: bg }}>
+                <span style={{ fontSize: 12, color: "var(--t2)" }}>{label}</span>
+                <span style={{ fontSize: 20, fontWeight: 800, color }}>{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="tw">
+          <div className="th"><Ico n="shield" s={14} c="var(--em)" /><span className="tt">GPV / Garantías</span></div>
+          <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+            {[
+              { label: "Vigentes", count: gpvVigentes - gpvPorVencer, color: "var(--em)", bg: "rgba(16,185,129,.08)" },
+              { label: "Por vencer ≤15d", count: gpvPorVencer, color: "var(--am)", bg: "rgba(245,158,11,.08)" },
+              { label: "Vencidas", count: gpvVencidas, color: "var(--ro)", bg: "rgba(239,68,68,.08)" },
+            ].map(({ label, count, color, bg }) => (
+              <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: "var(--r)", background: bg }}>
+                <span style={{ fontSize: 12, color: "var(--t2)" }}>{label}</span>
+                <span style={{ fontSize: 20, fontWeight: 800, color }}>{count}</span>
+              </div>
+            ))}
+            {gpvTotal === 0 && <div className="empty" style={{ padding: 8 }}>Sin registros GPV</div>}
+          </div>
+        </div>
+
+        <div className="tw">
+          <div className="th"><Ico n="truck" s={14} c="var(--pu)" /><span className="tt">Destino activos</span></div>
+          <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+            {[
+              { label: "Alquiler / Flota", count: alquiler, color: "var(--bl)", pct: Math.round(alquiler / totalA * 100) },
+              { label: "Venta de usado",   count: venta,    color: "var(--pu)", pct: Math.round(venta    / totalA * 100) },
+            ].map(({ label, count, color, pct }) => (
+              <div key={label} style={{ background: "var(--bg3)", borderRadius: "var(--r)", padding: "10px 12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, color: "var(--t2)" }}>{label}</span>
+                  <span style={{ fontSize: 16, fontWeight: 800, color }}>{count}</span>
+                </div>
+                <div style={{ height: 5, background: "var(--bo)", borderRadius: 99, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 99 }} />
+                </div>
+                <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 4 }}>{pct}% del total activo</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid22">
+        <div className="tw">
+          <div className="th"><Ico n="wrench" s={14} c="var(--te)" /><span className="tt">Promedio días por estado</span></div>
+          <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: 3 }}>
+            {avgByEstado.length === 0 ? <div className="empty">Sin datos</div> : avgByEstado.map(({ s, avg, count, color }) => (
+              <div key={s} className="bar-row">
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: "var(--t2)", width: 155, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s}</span>
+                <MiniBar value={avg} max={maxAvg} color={color} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: avg > 14 ? "var(--am)" : color, minWidth: 36, textAlign: "right" }}>{avg}d</span>
+                <span style={{ fontSize: 10, color: "var(--t3)", minWidth: 24, textAlign: "right" }}>({count})</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="tw">
+          <div className="th"><Ico n="kpi" s={14} c="var(--am)" /><span className="tt">Cuellos de botella</span><span style={{ marginLeft: "auto", fontSize: 10, color: "var(--t3)" }}>más tiempo en taller</span></div>
+          {bottlenecks.length === 0 ? <div className="empty">Sin equipos activos</div> : bottlenecks.map((m, i) => {
+            const dias = dDesde(m.fechaIngreso);
+            const col = dias > 30 ? "var(--ro)" : dias > 14 ? "var(--am)" : "var(--t2)";
+            const st = ST[m.estado] || {};
+            return (
+              <div key={m.id} className="ri">
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--t3)", minWidth: 16 }}>#{i + 1}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--t)" }}>{m.modelo}
+                    {m.interno && <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "monospace", marginLeft: 5 }}>{m.interno}</span>}
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 1 }}>{m.cliente || "Stock propio"}</div>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: col }}>{dias}d</span>
+                  <div style={{ marginTop: 2 }}><span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: st.bg, color: st.color, border: `1px solid ${st.border}`, fontWeight: 600 }}>{m.estado}</span></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {topModels.length > 0 && (
+        <div className="tw" style={{ marginTop: 14 }}>
+          <div className="th"><Ico n="tag" s={14} c="var(--bl)" /><span className="tt">Modelos con mayor presencia</span><span style={{ marginLeft: "auto", fontSize: 10, color: "var(--t3)" }}>equipos activos en taller</span></div>
+          <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: 3 }}>
+            {topModels.map(([model, count]) => {
+              const col = aColor(model);
+              return (
+                <div key={model} className="bar-row">
+                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: col, flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--t)", width: 140, flexShrink: 0 }}>{model}</span>
+                  <MiniBar value={count} max={maxModel} color={col} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: col, minWidth: 20, textAlign: "right" }}>{count}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Root App ──────────────────────────────────────────────────
 export default function App() {
   const [auth, setAuth] = useState(() => {
@@ -1250,20 +1504,39 @@ export default function App() {
   const [confirmState, setConfirm] = useState<{ source: string; item: Equipo | GPVEntry; msg: string } | null>(null);
   const [showTecModal, setShowTecModal] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastAppliedAtRef = useRef<string | null>(null);
 
-  const { data: apiState, isLoading: apiLoading } = useQuery({
+  const { data: apiState, isLoading: apiLoading, isFetching } = useQuery({
     ...getGetTallerStateQueryOptions(),
     enabled: auth,
+    refetchInterval: auth ? 20_000 : false,
+    refetchIntervalInBackground: false,
   });
   const { mutate: saveToApi } = useSaveTallerState();
 
+  const applyApiState = useCallback((s: typeof apiState) => {
+    if (!s) return;
+    setEquipos((s.equipos as Equipo[]).map(normalizeEquipo));
+    setGpvList(s.gpvList as GPVEntry[]);
+    setTecnicos((s.tecnicos as string[]).length > 0 ? s.tecnicos as string[] : DEFAULT_TECNICOS);
+    lastAppliedAtRef.current = s.updatedAt ?? null;
+  }, []);
+
+  // Initial load
   useEffect(() => {
     if (!auth || !apiState || loaded) return;
-    setEquipos((apiState.equipos as Equipo[]).map(normalizeEquipo));
-    setGpvList(apiState.gpvList as GPVEntry[]);
-    setTecnicos((apiState.tecnicos as string[]).length > 0 ? apiState.tecnicos as string[] : DEFAULT_TECNICOS);
+    applyApiState(apiState);
     setLoaded(true);
-  }, [auth, apiState, loaded]);
+  }, [auth, apiState, loaded, applyApiState]);
+
+  // Background sync — only apply if server has newer data and no local edit is pending
+  useEffect(() => {
+    if (!auth || !apiState || !loaded) return;
+    const newAt = apiState.updatedAt ?? null;
+    if (!newAt || newAt === lastAppliedAtRef.current) return;
+    if (saveTimerRef.current) return; // local edit pending — skip this cycle
+    applyApiState(apiState);
+  }, [auth, apiState, loaded, applyApiState]);
 
   useEffect(() => {
     if (!auth) setLoaded(false);
@@ -1366,12 +1639,14 @@ export default function App() {
     { id: "dashboard", label: "Dashboard",  icon: "dashboard" },
     { id: "taller",    label: "Taller",     icon: "wrench",   count: enTallerCnt },
     { id: "venta",     label: "Venta/GPV",  icon: "tag",      alert: gpvAlertaCnt, count: gpvList.length + disp.length },
+    { id: "kpis",      label: "KPIs",       icon: "kpi" },
     { id: "tecnicos",  label: "Técnicos",   icon: "users",    count: tecnicos.length },
   ];
   const titles: Record<string, [string, string]> = {
     dashboard: ["Dashboard", "Resumen general"],
     taller:    ["Taller", "Equipos en reparación"],
     venta:     ["Venta / GPV", "Disponibles · Garantía por venta"],
+    kpis:      ["KPIs — Equipos", "Indicadores de rendimiento operativo"],
     tecnicos:  ["Técnicos", "Gestión del equipo"],
   };
 
@@ -1442,19 +1717,28 @@ export default function App() {
           <div className="main">
             <header className="topbar">
               <div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--t)" }}>{titles[tab][0]}</div>
-                <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 1 }}>{titles[tab][1]}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--t)" }}>{titles[tab]?.[0] ?? ""}</div>
+                <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 1 }}>{titles[tab]?.[1] ?? ""}</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div className="srch">
-                  <Ico n="filter" s={14} c="var(--t3)" />
-                  <input placeholder="Buscar…" value={search} onChange={e => setSearch(e.target.value)} />
-                </div>
+                {isFetching && !apiLoading && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }} title="Sincronizando con el servidor…">
+                    <div className="sync-dot" />
+                    <span style={{ fontSize: 10, color: "var(--t3)" }}>sync</span>
+                  </div>
+                )}
+                {tab !== "kpis" && (
+                  <div className="srch">
+                    <Ico n="filter" s={14} c="var(--t3)" />
+                    <input placeholder="Buscar…" value={search} onChange={e => setSearch(e.target.value)} />
+                  </div>
+                )}
               </div>
             </header>
 
             <main className="content">
               {tab === "dashboard" && <Dashboard equipos={equipos} gpvList={gpvList} tecnicos={tecnicos} />}
+              {tab === "kpis" && <KPIsPage equipos={equipos} gpvList={gpvList} />}
               {tab === "taller" && (
                 <TallerPage
                   equipos={equipos}
