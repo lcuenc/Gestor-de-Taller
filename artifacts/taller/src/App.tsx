@@ -727,25 +727,27 @@ function TecnicosModal({ tecnicos, onSave, onClose }: {
           <button className="btni" onClick={onClose}><Ico n="x" s={15} /></button>
         </div>
 
-        <div className="mb" style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
-          <div style={{ background: "var(--bg3)", border: "1px solid var(--bo)", borderRadius: "var(--r)", padding: "10px 12px" }}>
-            <div className="fl" style={{ marginBottom: 6 }}>Agregar técnico</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input
-                className="fi"
-                value={newName}
-                onChange={e => setNewName(e.target.value)}
-                placeholder="Nombre completo (se guardará en mayúsculas)"
-                onKeyDown={e => { if (e.key === "Enter") addTec(); }}
-                style={{ flex: 1 }}
-              />
-              <button className="btn btnp" onClick={addTec} style={{ flexShrink: 0 }}>
-                <Ico n="plus" s={14} c="#fff" />Agregar
-              </button>
-            </div>
+        {/* Add form — fixed, never scrolls */}
+        <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--bo)", flexShrink: 0 }}>
+          <div className="fl" style={{ marginBottom: 6 }}>Agregar técnico</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              className="fi"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              placeholder="Nombre completo (se guardará en mayúsculas)"
+              onKeyDown={e => { if (e.key === "Enter") addTec(); }}
+              style={{ flex: 1 }}
+            />
+            <button className="btn btnp" onClick={addTec} style={{ flexShrink: 0 }}>
+              <Ico n="plus" s={14} c="#fff" />Agregar
+            </button>
           </div>
+        </div>
 
-          <div className="tw" style={{ marginTop: 4 }}>
+        {/* Scrollable technician list */}
+        <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+          <div style={{ padding: "4px 0" }}>
             {list.length === 0 ? (
               <div className="empty">Sin técnicos registrados</div>
             ) : list.map((t, i) => {
@@ -1361,6 +1363,75 @@ function KPIsPage({ equipos, gpvList, tecnicos: _tecList, onOpenEquipo }: {
 
   const tabLbl = subTab === "general" ? "taller" : subTab === "flota" ? "Flota" : "Venta";
 
+  const downloadReport = () => {
+    const now = new Date();
+    const fecha = now.toLocaleDateString("es-AR", { year: "numeric", month: "long", day: "numeric" });
+    const hora  = now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+    const nombre = subTab === "flota" ? "Flota (Alquiler)" : "Venta de Usado";
+    const rows = scope.map(e => {
+      const dias = dDesde(e.fechaIngreso);
+      const tecs = ((e.tecnicos as string[]) || []).filter(t => (t as string)?.trim()).join(", ") || "—";
+      const prio = e.prioridad === "rojo" ? "Alta" : e.prioridad === "amarillo" ? "Media" : "—";
+      return `<tr>
+        <td>${e.modelo}</td><td>${e.interno || "—"}</td><td>${e.cliente || "Stock"}</td>
+        <td>${e.estado}</td>
+        <td style="text-align:right;${dias > 30 ? "color:#dc2626;font-weight:700" : ""}">${dias}d</td>
+        <td>${tecs}</td><td>${prio}</td><td style="max-width:200px;word-break:break-word">${e.observacion || "—"}</td>
+      </tr>`;
+    }).join("");
+    const avgByEstRow = avgByEstado.map(x => `<tr><td>${x.s}</td><td style="text-align:right">${x.avg}d</td><td style="text-align:right">${x.count}</td></tr>`).join("");
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+<title>Reporte ${nombre} — ${fecha}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;color:#111;background:#fff;padding:36px;font-size:13px}
+h1{font-size:22px;font-weight:800;margin-bottom:3px}
+.sub{color:#666;font-size:12px;margin-bottom:28px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.card{border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px}
+.cv{font-size:24px;font-weight:800;line-height:1}
+.cl{font-size:10px;color:#888;margin-top:3px;text-transform:uppercase;letter-spacing:.4px}
+table{width:100%;border-collapse:collapse;margin-bottom:24px}
+th{background:#f9fafb;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#666;border-bottom:2px solid #e5e7eb}
+td{padding:7px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+.h2{font-size:14px;font-weight:700;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #e5e7eb}
+.side{display:grid;grid-template-columns:2fr 1fr;gap:20px}
+.footer{margin-top:28px;padding-top:14px;border-top:1px solid #e5e7eb;font-size:11px;color:#aaa;display:flex;justify-content:space-between}
+@media print{button{display:none}body{padding:20px}}
+</style></head><body>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+  <div>
+    <h1>Reporte — ${nombre}</h1>
+    <div class="sub">Gestión de Activos · Movimiento de Suelo · ${fecha} · ${hora}hs</div>
+  </div>
+  <button onclick="window.print()" style="background:#111;color:#fff;border:none;padding:9px 20px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">Imprimir / Guardar PDF</button>
+</div>
+<div class="grid">
+  <div class="card"><div class="cv">${scope.length}</div><div class="cl">Equipos activos</div></div>
+  <div class="card"><div class="cv" style="color:${avgTotal>20?"#dc2626":avgTotal>10?"#d97706":"#059669"}">${avgTotal}d</div><div class="cl">Promedio días en taller</div></div>
+  <div class="card"><div class="cv" style="color:${prioRojo>0?"#dc2626":"#111"}">${prioRojo}</div><div class="cl">Prioridad alta</div></div>
+  <div class="card"><div class="cv">${scope.filter(e=>(e.tecnicos as string[])?.some((t:string)=>t?.trim())).length}</div><div class="cl">Con técnico asignado</div></div>
+</div>
+<div class="h2">Listado de equipos</div>
+<table>
+  <thead><tr><th>Modelo</th><th>Interno</th><th>Cliente</th><th>Estado</th><th style="text-align:right">Días</th><th>Técnicos</th><th>Prioridad</th><th>Observaciones</th></tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="side">
+  <div>
+    <div class="h2">Tiempo promedio por estado</div>
+    <table><thead><tr><th>Estado</th><th style="text-align:right">Prom.</th><th style="text-align:right">Equipos</th></tr></thead><tbody>${avgByEstRow}</tbody></table>
+  </div>
+</div>
+<div class="footer">
+  <span>Gestión de Activos — Movimiento de Suelo</span>
+  <span>${scope.length} equipo${scope.length!==1?"s":""} · Generado ${fecha} ${hora}hs</span>
+</div>
+</body></html>`;
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); }
+  };
+
   return (
     <div>
       <div className="sh">
@@ -1370,12 +1441,20 @@ function KPIsPage({ equipos, gpvList, tecnicos: _tecList, onOpenEquipo }: {
         </div>
       </div>
 
-      <div className="sub-tab-bar">
-        {(["general", "flota", "venta"] as KpiSubTab[]).map(t => (
-          <button key={t} className={`sub-tab${subTab === t ? " active" : ""}`} onClick={() => setSubTab(t)}>
-            {t === "general" ? "General" : t === "flota" ? "Flota" : "Venta"}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div className="sub-tab-bar" style={{ marginBottom: 0 }}>
+          {(["general", "flota", "venta"] as KpiSubTab[]).map(t => (
+            <button key={t} className={`sub-tab${subTab === t ? " active" : ""}`} onClick={() => setSubTab(t)}>
+              {t === "general" ? "General" : t === "flota" ? "Flota" : "Venta"}
+            </button>
+          ))}
+        </div>
+        {subTab !== "general" && (
+          <button className="btn" style={{ fontSize: 11, padding: "5px 14px", display: "flex", alignItems: "center", gap: 6 }}
+            onClick={downloadReport}>
+            <Ico n="save" s={13} c="var(--t2)" />Descargar reporte
           </button>
-        ))}
+        )}
       </div>
 
       <div className="kpi-grid">
@@ -1386,17 +1465,45 @@ function KPIsPage({ equipos, gpvList, tecnicos: _tecList, onOpenEquipo }: {
           <>
             <Card val={gpvPorVencer} lbl="GPV próximas a vencer" color={gpvPorVencer > 0 ? "var(--am)" : "var(--em)"} sub={`de ${gpvTotal} en cartera`} />
             <Card val={gpvVencidas} lbl="GPV vencidas" color={gpvVencidas > 0 ? "var(--ro)" : "var(--t3)"} />
-            <div className="kpi-card" style={{ borderTopColor: "var(--pu)" }}>
-              <div style={{ display: "flex", gap: 0, height: 6, borderRadius: 99, overflow: "hidden", marginBottom: 6 }}>
-                <div style={{ flex: flotaPct, background: "var(--bl)" }} />
-                <div style={{ flex: ventaPct, background: "var(--pu)" }} />
-              </div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: "var(--t)", lineHeight: 1, marginBottom: 4 }}>
-                <span style={{ color: "var(--bl)" }}>{flotaPct}%</span>
-                <span style={{ color: "var(--t3)", fontSize: 14, margin: "0 4px" }}>/</span>
-                <span style={{ color: "var(--pu)" }}>{ventaPct}%</span>
-              </div>
-              <div className="kpi-lbl">Esfuerzo técnico<br /><span style={{ color: "var(--bl)", fontWeight: 600 }}>Flota</span> · <span style={{ color: "var(--pu)", fontWeight: 600 }}>Venta</span></div>
+            <div className="kpi-card" style={{ borderTopColor: "#10b981", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              {(() => {
+                const circ = 2 * Math.PI * 36;
+                const flotaArc = flotaPct / 100 * circ;
+                const ventaArc = circ - flotaArc;
+                return (
+                  <>
+                    <svg viewBox="0 0 100 100" width={96} height={96} style={{ display: "block" }}>
+                      <circle cx="50" cy="50" r="36" fill="none" stroke="#1e2535" strokeWidth="14" />
+                      <g transform="rotate(-90, 50, 50)">
+                        {flotaArc > 0 && (
+                          <circle cx="50" cy="50" r="36" fill="none" stroke="#10b981" strokeWidth="14"
+                            strokeDasharray={`${flotaArc} ${circ}`} strokeLinecap="butt" />
+                        )}
+                        {ventaArc > 0 && (
+                          <circle cx="50" cy="50" r="36" fill="none" stroke="#f59e0b" strokeWidth="14"
+                            strokeDasharray={`${ventaArc} ${circ}`}
+                            transform={`rotate(${flotaPct * 3.6}, 50, 50)`} strokeLinecap="butt" />
+                        )}
+                      </g>
+                      <text x="50" y="46" textAnchor="middle" fill="#e2e8f0" fontSize="15" fontWeight="800">{flotaPct}%</text>
+                      <text x="50" y="60" textAnchor="middle" fill="#64748b" fontSize="9">Flota</text>
+                    </svg>
+                    <div style={{ display: "flex", gap: 14, fontSize: 11 }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10b981", display: "inline-block" }} />
+                        <span style={{ color: "#10b981", fontWeight: 700 }}>{flotaPct}%</span>
+                        <span style={{ color: "var(--t3)" }}>Flota</span>
+                      </span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b", display: "inline-block" }} />
+                        <span style={{ color: "#f59e0b", fontWeight: 700 }}>{ventaPct}%</span>
+                        <span style={{ color: "var(--t3)" }}>Venta</span>
+                      </span>
+                    </div>
+                    <div className="kpi-lbl" style={{ textAlign: "center" }}>Esfuerzo técnico</div>
+                  </>
+                );
+              })()}
             </div>
           </>
         ) : (
