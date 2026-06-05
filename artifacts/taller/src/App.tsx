@@ -718,7 +718,7 @@ function TecnicosModal({ tecnicos, onSave, onClose }: {
 
   return (
     <div className="overlay">
-      <div className="modal" style={{ width: 500 }}>
+      <div className="modal" style={{ width: 500, maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
         <div className="mh">
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
             <Ico n="users" s={15} c="var(--te)" />
@@ -727,7 +727,7 @@ function TecnicosModal({ tecnicos, onSave, onClose }: {
           <button className="btni" onClick={onClose}><Ico n="x" s={15} /></button>
         </div>
 
-        <div className="mb">
+        <div className="mb" style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
           <div style={{ background: "var(--bg3)", border: "1px solid var(--bo)", borderRadius: "var(--r)", padding: "10px 12px" }}>
             <div className="fl" style={{ marginBottom: 6 }}>Agregar técnico</div>
             <div style={{ display: "flex", gap: 8 }}>
@@ -1144,13 +1144,14 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
 }
 
 // ── VentaPage ─────────────────────────────────────────────────
-function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, onAddGPV, search }: {
+function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, onAddGPV, onEditDisp, search }: {
   disponibles: Equipo[];
   gpvList: GPVEntry[];
   onEntrega: (m: Equipo) => void;
   onEditGPV: (g: GPVEntry) => void;
   onDeleteGPV: (g: GPVEntry) => void;
   onAddGPV: () => void;
+  onEditDisp: (m: Equipo) => void;
   search: string;
 }) {
   const [sub, setSub] = useState("disponibles");
@@ -1199,7 +1200,7 @@ function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, on
             <table>
               <thead>
                 <tr>
-                  <th>Equipo</th><th>Accesorio</th><th>Falla/Trabajo</th><th>Obs.</th><th style={{ textAlign: "right" }}>Acciones</th>
+                  <th>Equipo</th><th>Accesorio</th><th>Cliente</th><th>Observación</th><th style={{ textAlign: "right" }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -1212,10 +1213,13 @@ function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, on
                       {m.interno && <div style={{ fontSize: 10, color: "var(--t3)", fontFamily: "monospace" }}>{m.interno}</div>}
                     </td>
                     <td style={{ fontSize: 12, color: "var(--t3)" }}>{m.accesorio || "—"}</td>
-                    <td style={{ fontSize: 12, color: "var(--t2)" }}>{m.falla || "—"}</td>
+                    <td style={{ fontSize: 12, color: "var(--t2)" }}>{m.cliente || "—"}</td>
                     <td style={{ fontSize: 11, color: "var(--t3)", maxWidth: 160, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.observacion || "—"}</td>
                     <td>
                       <div style={{ display: "flex", justifyContent: "flex-end", gap: 3 }}>
+                        <button className="btni" title="Editar" onClick={() => onEditDisp(m)}>
+                          <Ico n="edit" s={14} />
+                        </button>
                         <button className="btn btnp" style={{ fontSize: 11, padding: "3px 10px" }} onClick={() => onEntrega(m)}>
                           <Ico n="truck" s={12} c="#fff" />Entregar
                         </button>
@@ -1555,11 +1559,17 @@ function KPIsPage({ equipos, gpvList, tecnicos: _tecList, onOpenEquipo }: {
 // LayoutState: bayId ("1"–"10") → array of equipo IDs
 type LayoutState = Record<string, number[]>;
 
-// Bays 1-2 support multiple equipos; 3-10 normally hold 1
+// Zone labels per bay
+const BAY_ZONE: Record<string, string> = {
+  "1": "Light", "2": "Light",
+  "10": "Martillos",
+};
+const getBayZone = (id: string) => BAY_ZONE[id] ?? "Heavy";
+
 const BAYS_CONFIG = Array.from({ length: 10 }, (_, i) => ({
   id: String(i + 1),
   label: `Bahía ${i + 1}`,
-  highCap: i < 2, // bays 1 and 2
+  highCap: i < 2,
 }));
 
 function LayoutPage({ equipos, layout, onUpdateLayout, onOpenEquipo }: {
@@ -1652,12 +1662,13 @@ function LayoutPage({ equipos, layout, onUpdateLayout, onOpenEquipo }: {
               <div key={bay.id} className={`bay-card${bay.highCap ? " high-cap" : ""}`}>
                 <div className="bay-hd">
                   <span className="bay-num">{bay.id}</span>
-                  {bay.highCap && (
-                    <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: "rgba(59,130,246,.12)", color: "var(--bl)", marginLeft: 4 }}>
-                      2-3 eq
-                    </span>
-                  )}
-                  <span className="bay-cap">{eqs.length} equipo{eqs.length !== 1 ? "s" : ""}</span>
+                  <span style={{
+                    fontSize: 9, padding: "1px 5px", borderRadius: 99, marginLeft: 4,
+                    background: getBayZone(bay.id) === "Light" ? "rgba(59,130,246,.12)" : getBayZone(bay.id) === "Martillos" ? "rgba(245,158,11,.12)" : "rgba(168,85,247,.1)",
+                    color: getBayZone(bay.id) === "Light" ? "var(--bl)" : getBayZone(bay.id) === "Martillos" ? "var(--am)" : "var(--pu)",
+                    fontWeight: 700,
+                  }}>{getBayZone(bay.id)}</span>
+                  <span className="bay-cap">{eqs.length} eq</span>
                 </div>
                 <div className="bay-body">
                   {eqs.map(eq => {
@@ -1701,6 +1712,16 @@ function LayoutPage({ equipos, layout, onUpdateLayout, onOpenEquipo }: {
               </div>
             );
           })}
+        </div>
+
+        {/* Senda peatonal */}
+        <div style={{
+          marginTop: 10, height: 22, borderRadius: "var(--r)",
+          background: "repeating-linear-gradient(90deg, rgba(245,158,11,.18) 0px, rgba(245,158,11,.18) 18px, transparent 18px, transparent 28px)",
+          border: "1px solid rgba(245,158,11,.25)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: "rgba(245,158,11,.7)", letterSpacing: 3 }}>SENDA PEATONAL</span>
         </div>
       </div>
 
@@ -2019,7 +2040,7 @@ export default function App() {
             <div className="sbft">
               {!collapsed ? (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
-                  <span style={{ fontSize: 11, color: "var(--t3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>admin@taller.com</span>
+                  <span style={{ fontSize: 11, color: "var(--t3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Movimiento de Suelo</span>
                   <button className="btni" onClick={handleLogout}><Ico n="logout" s={15} /></button>
                 </div>
               ) : (
@@ -2078,6 +2099,7 @@ export default function App() {
                   gpvList={gpvList}
                   search={search}
                   onEntrega={m => setModalE(m)}
+                  onEditDisp={m => setModal({ type: "taller", item: m })}
                   onEditGPV={g => setModal({ type: "gpv", item: g })}
                   onDeleteGPV={g => setConfirm({ source: "gpv", item: g, msg: `Eliminará "${g.modelo}" del registro GPV.` })}
                   onAddGPV={() => setModal({ type: "gpv", item: null })}
