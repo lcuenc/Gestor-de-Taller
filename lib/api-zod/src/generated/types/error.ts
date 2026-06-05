@@ -6,4 +6,6 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type TallerStateInputLayout = {[key: string]: number[]};
+export interface Error {
+  error: string;
+}

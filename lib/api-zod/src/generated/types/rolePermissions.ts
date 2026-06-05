@@ -5,5 +5,6 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ModulePermission } from './modulePermission';
 
-export type TallerStateInputLayout = {[key: string]: number[]};
+export type RolePermissions = {[key: string]: ModulePermission};

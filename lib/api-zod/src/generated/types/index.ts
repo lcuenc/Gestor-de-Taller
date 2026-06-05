@@ -6,10 +6,24 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './authSession';
+export * from './conflict';
 export * from './equipo';
+export * from './error';
 export * from './gPVEntry';
 export * from './healthStatus';
+export * from './loginInput';
+export * from './modulePermission';
+export * from './role';
+export * from './roleInput';
+export * from './roleInputPermissions';
+export * from './rolePermissions';
+export * from './roleUpdate';
+export * from './roleUpdatePermissions';
 export * from './tallerState';
 export * from './tallerStateInput';
 export * from './tallerStateInputLayout';
 export * from './tallerStateLayout';
+export * from './user';
+export * from './userInput';
+export * from './userUpdate';

@@ -5,5 +5,9 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { TallerState } from './tallerState';
 
-export type TallerStateInputLayout = {[key: string]: number[]};
+export interface Conflict {
+  error: string;
+  current: TallerState;
+}

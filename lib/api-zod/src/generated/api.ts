@@ -47,7 +47,7 @@ export const GetTallerStateResponse = zod.object({
   "estado": zod.string()
 })),
   "tecnicos": zod.array(zod.string()),
-  "layout": zod.record(zod.string(), zod.number()),
+  "layout": zod.record(zod.string(), zod.array(zod.number())),
   "updatedAt": zod.string().nullish()
 })
 
@@ -82,7 +82,8 @@ export const SaveTallerStateBody = zod.object({
   "estado": zod.string()
 })),
   "tecnicos": zod.array(zod.string()),
-  "layout": zod.record(zod.string(), zod.number())
+  "layout": zod.record(zod.string(), zod.array(zod.number())),
+  "expectedUpdatedAt": zod.string().nullish().describe('Last-known updatedAt for optimistic concurrency. If it does not match the stored value, the server returns 409.')
 })
 
 export const SaveTallerStateResponse = zod.object({
@@ -111,8 +112,219 @@ export const SaveTallerStateResponse = zod.object({
   "estado": zod.string()
 })),
   "tecnicos": zod.array(zod.string()),
-  "layout": zod.record(zod.string(), zod.number()),
+  "layout": zod.record(zod.string(), zod.array(zod.number())),
   "updatedAt": zod.string().nullish()
+})
+
+
+/**
+ * @summary Log in with username and password
+ */
+
+
+
+
+export const LoginBody = zod.object({
+  "username": zod.string().min(1),
+  "password": zod.string().min(1)
+})
+
+export const LoginResponse = zod.object({
+  "user": zod.object({
+  "id": zod.number(),
+  "username": zod.string(),
+  "nombre": zod.string(),
+  "roleId": zod.number(),
+  "roleName": zod.string(),
+  "activo": zod.boolean()
+}),
+  "role": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "isSystem": zod.boolean(),
+  "permissions": zod.record(zod.string(), zod.object({
+  "view": zod.boolean(),
+  "create": zod.boolean(),
+  "edit": zod.boolean(),
+  "delete": zod.boolean()
+}))
+})
+})
+
+
+/**
+ * @summary Log out the current session
+ */
+export const LogoutResponse = zod.object({
+  "status": zod.string()
+})
+
+
+/**
+ * @summary Get the current authenticated user and role
+ */
+export const GetCurrentUserResponse = zod.object({
+  "user": zod.object({
+  "id": zod.number(),
+  "username": zod.string(),
+  "nombre": zod.string(),
+  "roleId": zod.number(),
+  "roleName": zod.string(),
+  "activo": zod.boolean()
+}),
+  "role": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "isSystem": zod.boolean(),
+  "permissions": zod.record(zod.string(), zod.object({
+  "view": zod.boolean(),
+  "create": zod.boolean(),
+  "edit": zod.boolean(),
+  "delete": zod.boolean()
+}))
+})
+})
+
+
+/**
+ * @summary List all users
+ */
+export const ListUsersResponseItem = zod.object({
+  "id": zod.number(),
+  "username": zod.string(),
+  "nombre": zod.string(),
+  "roleId": zod.number(),
+  "roleName": zod.string(),
+  "activo": zod.boolean()
+})
+export const ListUsersResponse = zod.array(ListUsersResponseItem)
+
+
+/**
+ * @summary Create a user
+ */
+
+export const createUserBodyPasswordMin = 6;
+
+
+
+export const CreateUserBody = zod.object({
+  "username": zod.string().min(1),
+  "nombre": zod.string().optional(),
+  "password": zod.string().min(createUserBodyPasswordMin),
+  "roleId": zod.number(),
+  "activo": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Update a user
+ */
+export const UpdateUserParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateUserBodyPasswordMin = 6;
+
+
+
+export const UpdateUserBody = zod.object({
+  "nombre": zod.string().optional(),
+  "password": zod.string().min(updateUserBodyPasswordMin).optional(),
+  "roleId": zod.number().optional(),
+  "activo": zod.boolean().optional()
+})
+
+export const UpdateUserResponse = zod.object({
+  "id": zod.number(),
+  "username": zod.string(),
+  "nombre": zod.string(),
+  "roleId": zod.number(),
+  "roleName": zod.string(),
+  "activo": zod.boolean()
+})
+
+
+/**
+ * @summary Delete a user
+ */
+export const DeleteUserParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List all roles
+ */
+export const ListRolesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "isSystem": zod.boolean(),
+  "permissions": zod.record(zod.string(), zod.object({
+  "view": zod.boolean(),
+  "create": zod.boolean(),
+  "edit": zod.boolean(),
+  "delete": zod.boolean()
+}))
+})
+export const ListRolesResponse = zod.array(ListRolesResponseItem)
+
+
+/**
+ * @summary Create a role
+ */
+
+
+
+export const CreateRoleBody = zod.object({
+  "name": zod.string().min(1),
+  "permissions": zod.record(zod.string(), zod.object({
+  "view": zod.boolean(),
+  "create": zod.boolean(),
+  "edit": zod.boolean(),
+  "delete": zod.boolean()
+}))
+})
+
+
+/**
+ * @summary Update a role
+ */
+export const UpdateRoleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const UpdateRoleBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "permissions": zod.record(zod.string(), zod.object({
+  "view": zod.boolean(),
+  "create": zod.boolean(),
+  "edit": zod.boolean(),
+  "delete": zod.boolean()
+})).optional()
+})
+
+export const UpdateRoleResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "isSystem": zod.boolean(),
+  "permissions": zod.record(zod.string(), zod.object({
+  "view": zod.boolean(),
+  "create": zod.boolean(),
+  "edit": zod.boolean(),
+  "delete": zod.boolean()
+}))
+})
+
+
+/**
+ * @summary Delete a role
+ */
+export const DeleteRoleParams = zod.object({
+  "id": zod.coerce.number()
 })
 
 

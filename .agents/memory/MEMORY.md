@@ -1,0 +1,1 @@
+- [Singleton state concurrency](singleton-state-concurrency.md) — taller_state single-row writes: advisory-lock tx, ISO-string stamp compare, canonical jsonb diff for per-section authz.

@@ -36,7 +36,7 @@ export interface GPVEntry {
   estado: string;
 }
 
-export type TallerStateLayout = {[key: string]: number};
+export type TallerStateLayout = {[key: string]: number[]};
 
 export interface TallerState {
   equipos: Equipo[];
@@ -47,12 +47,97 @@ export interface TallerState {
   updatedAt?: string | null;
 }
 
-export type TallerStateInputLayout = {[key: string]: number};
+export type TallerStateInputLayout = {[key: string]: number[]};
 
 export interface TallerStateInput {
   equipos: Equipo[];
   gpvList: GPVEntry[];
   tecnicos: string[];
   layout: TallerStateInputLayout;
+  /**
+     * Last-known updatedAt for optimistic concurrency. If it does not match the stored value, the server returns 409.
+     * @nullable
+     */
+  expectedUpdatedAt?: string | null;
+}
+
+export interface Error {
+  error: string;
+}
+
+export interface Conflict {
+  error: string;
+  current: TallerState;
+}
+
+export interface ModulePermission {
+  view: boolean;
+  create: boolean;
+  edit: boolean;
+  delete: boolean;
+}
+
+export type RolePermissions = {[key: string]: ModulePermission};
+
+export interface Role {
+  id: number;
+  name: string;
+  isSystem: boolean;
+  permissions: RolePermissions;
+}
+
+export type RoleInputPermissions = {[key: string]: ModulePermission};
+
+export interface RoleInput {
+  /** @minLength 1 */
+  name: string;
+  permissions: RoleInputPermissions;
+}
+
+export type RoleUpdatePermissions = {[key: string]: ModulePermission};
+
+export interface RoleUpdate {
+  /** @minLength 1 */
+  name?: string;
+  permissions?: RoleUpdatePermissions;
+}
+
+export interface User {
+  id: number;
+  username: string;
+  nombre: string;
+  roleId: number;
+  roleName: string;
+  activo: boolean;
+}
+
+export interface UserInput {
+  /** @minLength 1 */
+  username: string;
+  nombre?: string;
+  /** @minLength 6 */
+  password: string;
+  roleId: number;
+  activo?: boolean;
+}
+
+export interface UserUpdate {
+  nombre?: string;
+  /** @minLength 6 */
+  password?: string;
+  roleId?: number;
+  activo?: boolean;
+}
+
+export interface LoginInput {
+  /** @minLength 1 */
+  username: string;
+  /** @minLength 1 */
+  password: string;
+}
+
+export interface AuthSession {
+  user: User;
+  role: Role;
 }
 

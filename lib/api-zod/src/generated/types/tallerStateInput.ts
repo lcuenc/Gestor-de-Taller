@@ -14,4 +14,9 @@ export interface TallerStateInput {
   gpvList: GPVEntry[];
   tecnicos: string[];
   layout: TallerStateInputLayout;
+  /**
+     * Last-known updatedAt for optimistic concurrency. If it does not match the stored value, the server returns 409.
+     * @nullable
+     */
+  expectedUpdatedAt?: string | null;
 }

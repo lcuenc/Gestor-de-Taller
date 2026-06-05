@@ -6,4 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type TallerStateInputLayout = {[key: string]: number[]};
+export interface ModulePermission {
+  view: boolean;
+  create: boolean;
+  edit: boolean;
+  delete: boolean;
+}

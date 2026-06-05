@@ -6,4 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type TallerStateInputLayout = {[key: string]: number[]};
+export interface LoginInput {
+  /** @minLength 1 */
+  username: string;
+  /** @minLength 1 */
+  password: string;
+}

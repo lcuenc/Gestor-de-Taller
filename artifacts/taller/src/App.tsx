@@ -1,8 +1,46 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { getGetTallerStateQueryOptions, useSaveTallerState } from "@workspace/api-client-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  getGetTallerStateQueryOptions,
+  useSaveTallerState,
+  getGetCurrentUserQueryOptions,
+  getListUsersQueryOptions,
+  getListRolesQueryOptions,
+  useLogin,
+  useLogout,
+  useCreateUser,
+  useUpdateUser,
+  useDeleteUser,
+  useCreateRole,
+  useUpdateRole,
+  useDeleteRole,
+} from "@workspace/api-client-react";
+import type {
+  User,
+  Role,
+  ModulePermission,
+  RolePermissions,
+  AuthSession,
+  TallerState,
+} from "@workspace/api-client-react";
 
-const PASSWORD = "Movimiento2026*";
+// ── Permissions model (mirrors backend MODULES) ────────────────
+const MODULES = ["dashboard", "taller", "venta", "kpis", "layout", "tecnicos", "admin"] as const;
+type ModuleId = (typeof MODULES)[number];
+type PermAction = "view" | "create" | "edit" | "delete";
+const MODULE_LABELS: Record<ModuleId, string> = {
+  dashboard: "Dashboard",
+  taller: "Taller",
+  venta: "Venta / GPV",
+  kpis: "KPIs",
+  layout: "Layout",
+  tecnicos: "Técnicos",
+  admin: "Administración",
+};
+const ACTION_LABELS: Record<PermAction, string> = {
+  view: "Ver", create: "Crear", edit: "Editar", delete: "Eliminar",
+};
+const emptyPerm = (): ModulePermission => ({ view: false, create: false, edit: false, delete: false });
 
 const DEFAULT_TECNICOS = [
   "LUKAS ROBERTO GUILLER","KASPARIAN CHRISTIAN G","TWERDOCHLIB CLAUDIO",
@@ -413,12 +451,25 @@ function Confirm({ msg, onOk, onCancel }: { msg: string; onOk: () => void; onCan
 
 // ── Login ─────────────────────────────────────────────────────
 function Login({ onLogin }: { onLogin: () => void }) {
+  const [username, setUsername] = useState("");
   const [pw, setPw] = useState("");
-  const [err, setErr] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const { mutate: login, isPending } = useLogin();
 
   const tryLogin = () => {
-    if (pw === PASSWORD) { setErr(false); onLogin(); }
-    else { setErr(true); setPw(""); }
+    if (!username.trim() || !pw) { setErr("Ingresá usuario y contraseña"); return; }
+    setErr(null);
+    login(
+      { data: { username: username.trim(), password: pw } },
+      {
+        onSuccess: () => { setErr(null); onLogin(); },
+        onError: (e: unknown) => {
+          const status = (e as { status?: number })?.status;
+          setErr(status === 401 ? "Usuario o contraseña incorrectos" : "No se pudo iniciar sesión. Reintentá.");
+          setPw("");
+        },
+      },
+    );
   };
 
   return (
@@ -437,21 +488,32 @@ function Login({ onLogin }: { onLogin: () => void }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div className="fg">
             <label className="fl" style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <Ico n="lock" s={11} c="var(--t3)" />Contraseña de acceso
+              <Ico n="users" s={11} c="var(--t3)" />Usuario
             </label>
             <input
-              className="fi" type="password" value={pw} placeholder="••••••••••••"
-              onChange={e => { setPw(e.target.value); setErr(false); }}
+              className="fi" type="text" value={username} placeholder="usuario" autoFocus autoComplete="username"
+              onChange={e => { setUsername(e.target.value); setErr(null); }}
               onKeyDown={e => { if (e.key === "Enter") tryLogin(); }}
             />
-            {err && (
-              <div className="lerr">
-                <Ico n="alert" s={13} c="var(--ro)" />Contraseña incorrecta
-              </div>
-            )}
           </div>
-          <button className="btn btnp" style={{ justifyContent: "center", marginTop: 4 }} onClick={tryLogin}>
-            <Ico n="arrowR" s={15} c="#fff" />Ingresar
+          <div className="fg">
+            <label className="fl" style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <Ico n="lock" s={11} c="var(--t3)" />Contraseña
+            </label>
+            <input
+              className="fi" type="password" value={pw} placeholder="••••••••••••" autoComplete="current-password"
+              onChange={e => { setPw(e.target.value); setErr(null); }}
+              onKeyDown={e => { if (e.key === "Enter") tryLogin(); }}
+            />
+          </div>
+          {err && (
+            <div className="lerr">
+              <Ico n="alert" s={13} c="var(--ro)" />{err}
+            </div>
+          )}
+          <button className="btn btnp" style={{ justifyContent: "center", marginTop: 4, opacity: isPending ? 0.7 : 1 }}
+            disabled={isPending} onClick={tryLogin}>
+            <Ico n="arrowR" s={15} c="#fff" />{isPending ? "Ingresando…" : "Ingresar"}
           </button>
         </div>
       </div>
@@ -460,12 +522,13 @@ function Login({ onLogin }: { onLogin: () => void }) {
 }
 
 // ── TallerModal ───────────────────────────────────────────────
-function TallerModal({ item, allEquipos, onSave, onClose, tecnicos }: {
+function TallerModal({ item, allEquipos, onSave, onClose, tecnicos, canEdit = true }: {
   item: Equipo | null;
   allEquipos: Equipo[];
   onSave: (f: Partial<Equipo>) => void;
   onClose: () => void;
   tecnicos: string[];
+  canEdit?: boolean;
 }) {
   const [form, setForm] = useState<Partial<Equipo>>(item || {
     destino: "alquiler", modelo: "", interno: "", accesorio: "", cliente: "",
@@ -579,10 +642,12 @@ function TallerModal({ item, allEquipos, onSave, onClose, tecnicos }: {
         </div>
 
         <div className="mf">
-          <button className="btn btns" onClick={onClose}>Cancelar</button>
-          <button className="btn btnp" onClick={() => { if (!form.modelo?.trim()) return; onSave(form); }}>
-            <Ico n="save" s={14} c="#fff" />{item ? "Guardar" : "Registrar"}
-          </button>
+          <button className="btn btns" onClick={onClose}>{canEdit ? "Cancelar" : "Cerrar"}</button>
+          {canEdit && (
+            <button className="btn btnp" onClick={() => { if (!form.modelo?.trim()) return; onSave(form); }}>
+              <Ico n="save" s={14} c="#fff" />{item ? "Guardar" : "Registrar"}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -629,7 +694,7 @@ function ModalEntrega({ equipo, onConfirm, onClose }: { equipo: Equipo; onConfir
 }
 
 // ── ModalGPV ──────────────────────────────────────────────────
-function ModalGPV({ item, onSave, onClose }: { item: GPVEntry | null; onSave: (f: Partial<GPVEntry>) => void; onClose: () => void }) {
+function ModalGPV({ item, onSave, onClose, canEdit = true }: { item: GPVEntry | null; onSave: (f: Partial<GPVEntry>) => void; onClose: () => void; canEdit?: boolean }) {
   const [form, setForm] = useState<Partial<GPVEntry>>(item || { modelo: "", interno: "", cliente: "", fechaEntrega: new Date().toISOString().slice(0, 10), observacion: "" });
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
   const vence = form.fechaEntrega ? new Date(new Date(form.fechaEntrega).getTime() + DIAS_GPV * 86400000).toLocaleDateString("es-AR") : "";
@@ -670,10 +735,12 @@ function ModalGPV({ item, onSave, onClose }: { item: GPVEntry | null; onSave: (f
           {form.fechaEntrega && <div className="ibox">GPV vence: <strong>{vence}</strong></div>}
         </div>
         <div className="mf">
-          <button className="btn btns" onClick={onClose}>Cancelar</button>
-          <button className="btn btnp" onClick={() => { if (!form.modelo?.trim()) return; onSave({ ...form, estado: ESTADO_VEND }); }}>
-            <Ico n="save" s={14} c="#fff" />{item ? "Guardar" : "Registrar"}
-          </button>
+          <button className="btn btns" onClick={onClose}>{canEdit ? "Cancelar" : "Cerrar"}</button>
+          {canEdit && (
+            <button className="btn btnp" onClick={() => { if (!form.modelo?.trim()) return; onSave({ ...form, estado: ESTADO_VEND }); }}>
+              <Ico n="save" s={14} c="#fff" />{item ? "Guardar" : "Registrar"}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -681,10 +748,11 @@ function ModalGPV({ item, onSave, onClose }: { item: GPVEntry | null; onSave: (f
 }
 
 // ── TecnicosModal ─────────────────────────────────────────────
-function TecnicosModal({ tecnicos, onSave, onClose }: {
+function TecnicosModal({ tecnicos, onSave, onClose, canEdit }: {
   tecnicos: string[];
   onSave: (t: string[]) => void;
   onClose: () => void;
+  canEdit: boolean;
 }) {
   const [list, setList] = useState<string[]>([...tecnicos]);
   const [newName, setNewName] = useState("");
@@ -728,22 +796,24 @@ function TecnicosModal({ tecnicos, onSave, onClose }: {
         </div>
 
         {/* Add form — fixed, never scrolls */}
-        <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--bo)", flexShrink: 0 }}>
-          <div className="fl" style={{ marginBottom: 6 }}>Agregar técnico</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              className="fi"
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              placeholder="Nombre completo (se guardará en mayúsculas)"
-              onKeyDown={e => { if (e.key === "Enter") addTec(); }}
-              style={{ flex: 1 }}
-            />
-            <button className="btn btnp" onClick={addTec} style={{ flexShrink: 0 }}>
-              <Ico n="plus" s={14} c="#fff" />Agregar
-            </button>
+        {canEdit && (
+          <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--bo)", flexShrink: 0 }}>
+            <div className="fl" style={{ marginBottom: 6 }}>Agregar técnico</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                className="fi"
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                placeholder="Nombre completo (se guardará en mayúsculas)"
+                onKeyDown={e => { if (e.key === "Enter") addTec(); }}
+                style={{ flex: 1 }}
+              />
+              <button className="btn btnp" onClick={addTec} style={{ flexShrink: 0 }}>
+                <Ico n="plus" s={14} c="#fff" />Agregar
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Scrollable technician list */}
         <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
@@ -775,8 +845,8 @@ function TecnicosModal({ tecnicos, onSave, onClose }: {
                 <div key={i} className="tec-row">
                   <div style={{ width: 30, height: 30, borderRadius: "50%", background: `${col}22`, border: `1px solid ${col}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: col, flexShrink: 0 }}>{inits(t)}</div>
                   <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "var(--t)" }}>{t}</span>
-                  <button className="btni" onClick={() => startEdit(i)} title="Editar"><Ico n="edit" s={14} /></button>
-                  <button className="btni" onClick={() => setConfirmDel(i)} title="Eliminar"><Ico n="trash" s={14} c="var(--ro)" /></button>
+                  {canEdit && <button className="btni" onClick={() => startEdit(i)} title="Editar"><Ico n="edit" s={14} /></button>}
+                  {canEdit && <button className="btni" onClick={() => setConfirmDel(i)} title="Eliminar"><Ico n="trash" s={14} c="var(--ro)" /></button>}
                 </div>
               );
             })}
@@ -784,10 +854,12 @@ function TecnicosModal({ tecnicos, onSave, onClose }: {
         </div>
 
         <div className="mf">
-          <button className="btn btns" onClick={onClose}>Cancelar</button>
-          <button className="btn btnp" onClick={() => { onSave(list); onClose(); }}>
-            <Ico n="save" s={14} c="#fff" />Guardar lista
-          </button>
+          <button className="btn btns" onClick={onClose}>{canEdit ? "Cancelar" : "Cerrar"}</button>
+          {canEdit && (
+            <button className="btn btnp" onClick={() => { onSave(list); onClose(); }}>
+              <Ico n="save" s={14} c="#fff" />Guardar lista
+            </button>
+          )}
         </div>
 
         {confirmDel !== null && (
@@ -968,7 +1040,7 @@ function SortIcon({ col, sortCol, sortDir }: { col: string; sortCol: string; sor
 }
 
 // ── TallerPage ────────────────────────────────────────────────
-function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnicos }: {
+function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnicos, canCreate, canEdit, canDelete }: {
   equipos: Equipo[];
   onAdd: () => void;
   onEdit: (m: Equipo) => void;
@@ -976,6 +1048,9 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
   onListo: (m: Equipo) => void;
   search: string;
   tecnicos: string[];
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }) {
   const [ef, setEf] = useState("Activos");
   const [df, setDf] = useState("Todos");
@@ -1032,7 +1107,7 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
         <div style={{ fontSize: 13, color: "var(--t2)", fontWeight: 600 }}>
           {sorted.length} equipo{sorted.length !== 1 ? "s" : ""} <span style={{ color: "var(--t3)", fontWeight: 400 }}>en esta vista</span>
         </div>
-        <button className="btn btnp" onClick={onAdd}><Ico n="plus" s={14} c="#fff" />Registrar ingreso</button>
+        {canCreate && <button className="btn btnp" onClick={onAdd}><Ico n="plus" s={14} c="#fff" />Registrar ingreso</button>}
       </div>
 
       <div className="fb">
@@ -1119,18 +1194,19 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
                     <td style={{ maxWidth: 140, fontSize: 11, color: "var(--t3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.observacion || "—"}</td>
                     <td>
                       <div style={{ display: "flex", justifyContent: "flex-end", gap: 3 }}>
-                        <button className="btni" onClick={() => onEdit(m)}><Ico n="edit" s={14} /></button>
-                        {m.estado === ESTADO_LISTO && m.destino === "venta" && (
+                        {canEdit && <button className="btni" onClick={() => onEdit(m)}><Ico n="edit" s={14} /></button>}
+                        {canEdit && m.estado === ESTADO_LISTO && m.destino === "venta" && (
                           <button className="btn btnb" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => onListo(m)}>
                             <Ico n="arrowR" s={12} c="var(--bl)" />Disp.
                           </button>
                         )}
-                        {m.estado === ESTADO_LISTO && m.destino === "alquiler" && (
+                        {canEdit && m.estado === ESTADO_LISTO && m.destino === "alquiler" && (
                           <button className="btn btnp" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => onListo(m)}>
                             <Ico n="check" s={12} c="#fff" />Entrega
                           </button>
                         )}
-                        <button className="btni" onClick={() => onDelete(m)}><Ico n="trash" s={14} c="var(--ro)" /></button>
+                        {canDelete && <button className="btni" onClick={() => onDelete(m)}><Ico n="trash" s={14} c="var(--ro)" /></button>}
+                        {!canEdit && !canDelete && <span style={{ color: "var(--t3)", fontSize: 11 }}>—</span>}
                       </div>
                     </td>
                   </tr>
@@ -1145,7 +1221,7 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
 }
 
 // ── VentaPage ─────────────────────────────────────────────────
-function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, onAddGPV, onEditDisp, search }: {
+function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, onAddGPV, onEditDisp, search, canCreate, canEdit, canDelete }: {
   disponibles: Equipo[];
   gpvList: GPVEntry[];
   onEntrega: (m: Equipo) => void;
@@ -1154,6 +1230,9 @@ function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, on
   onAddGPV: () => void;
   onEditDisp: (m: Equipo) => void;
   search: string;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }) {
   const [sub, setSub] = useState("disponibles");
   const [gf, setGf] = useState("Todos");
@@ -1174,7 +1253,7 @@ function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, on
   return (
     <div>
       <div className="sh" style={{ justifyContent: "flex-end" }}>
-        <button className="btn btnp" onClick={onAddGPV}><Ico n="plus" s={14} c="#fff" />Registrar venta</button>
+        {canCreate && <button className="btn btnp" onClick={onAddGPV}><Ico n="plus" s={14} c="#fff" />Registrar venta</button>}
       </div>
 
       <div className="fb">
@@ -1214,12 +1293,13 @@ function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, on
                     <td style={{ fontSize: 11, color: "var(--t3)", maxWidth: 160, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.observacion || "—"}</td>
                     <td>
                       <div style={{ display: "flex", justifyContent: "flex-end", gap: 3 }}>
-                        <button className="btni" title="Editar" onClick={() => onEditDisp(m)}>
+                        {canEdit && <button className="btni" title="Editar" onClick={() => onEditDisp(m)}>
                           <Ico n="edit" s={14} />
-                        </button>
-                        <button className="btn btnp" style={{ fontSize: 11, padding: "3px 10px" }} onClick={() => onEntrega(m)}>
+                        </button>}
+                        {canEdit && <button className="btn btnp" style={{ fontSize: 11, padding: "3px 10px" }} onClick={() => onEntrega(m)}>
                           <Ico n="truck" s={12} c="#fff" />Entregar
-                        </button>
+                        </button>}
+                        {!canEdit && <span style={{ color: "var(--t3)", fontSize: 11 }}>—</span>}
                       </div>
                     </td>
                   </tr>
@@ -1254,8 +1334,9 @@ function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, on
                     <td style={{ fontSize: 11, color: "var(--t3)", maxWidth: 140, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.observacion || "—"}</td>
                     <td>
                       <div style={{ display: "flex", justifyContent: "flex-end", gap: 3 }}>
-                        <button className="btni" onClick={() => onEditGPV(g)}><Ico n="edit" s={14} /></button>
-                        <button className="btni" onClick={() => onDeleteGPV(g)}><Ico n="trash" s={14} c="var(--ro)" /></button>
+                        {canEdit && <button className="btni" onClick={() => onEditGPV(g)}><Ico n="edit" s={14} /></button>}
+                        {canDelete && <button className="btni" onClick={() => onDeleteGPV(g)}><Ico n="trash" s={14} c="var(--ro)" /></button>}
+                        {!canEdit && !canDelete && <span style={{ color: "var(--t3)", fontSize: 11 }}>—</span>}
                       </div>
                     </td>
                   </tr>
@@ -1667,11 +1748,12 @@ const BAYS_CONFIG = Array.from({ length: 10 }, (_, i) => ({
   highCap: i < 2,
 }));
 
-function LayoutPage({ equipos, layout, onUpdateLayout, onOpenEquipo }: {
+function LayoutPage({ equipos, layout, onUpdateLayout, onOpenEquipo, canEdit }: {
   equipos: Equipo[];
   layout: LayoutState;
   onUpdateLayout: (l: LayoutState) => void;
   onOpenEquipo: (e: Equipo) => void;
+  canEdit: boolean;
 }) {
   const [picker, setPicker] = useState<string | null>(null); // bayId being assigned
   const [pickerSearch, setPickerSearch] = useState("");
@@ -1735,7 +1817,7 @@ function LayoutPage({ equipos, layout, onUpdateLayout, onOpenEquipo }: {
             <span style={{ color: "var(--pu)", marginLeft: 8 }}>Venta</span>
           </div>
         </div>
-        {placedCnt > 0 && (
+        {canEdit && placedCnt > 0 && (
           <button className="btn" style={{ fontSize: 11, padding: "4px 12px" }}
             onClick={() => { if (window.confirm("¿Limpiar todas las posiciones?")) onUpdateLayout({}); }}>
             Limpiar todo
@@ -1790,19 +1872,19 @@ function LayoutPage({ equipos, layout, onUpdateLayout, onOpenEquipo }: {
                               color: urgente ? "var(--ro)" : "var(--t3)" }}>{dias}d</span>
                           </div>
                         </div>
-                        <button
+                        {canEdit && <button
                           onClick={e => removeFromBay(e, bay.id, eq.id)}
                           style={{ background: "none", border: "none", cursor: "pointer",
                             color: "var(--t3)", fontSize: 14, lineHeight: 1, padding: "0 2px",
                             flexShrink: 0, display: "flex", alignItems: "center" }}
-                          title="Quitar de la bahía">×</button>
+                          title="Quitar de la bahía">×</button>}
                       </div>
                     );
                   })}
-                  <button className="bay-add" onClick={() => { setPicker(bay.id); setPickerSearch(""); }}>
+                  {canEdit && <button className="bay-add" onClick={() => { setPicker(bay.id); setPickerSearch(""); }}>
                     <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
                     <span>Agregar</span>
-                  </button>
+                  </button>}
                 </div>
               </div>
             );
@@ -1908,11 +1990,301 @@ function LayoutPage({ equipos, layout, onUpdateLayout, onOpenEquipo }: {
   );
 }
 
+// ── Admin: User modal ─────────────────────────────────────────
+function UserModal({ item, roles, onSave, onClose }: {
+  item: User | null;
+  roles: Role[];
+  onSave: (form: { username?: string; nombre?: string; password?: string; roleId: number; activo: boolean }) => void;
+  onClose: () => void;
+}) {
+  const [username, setUsername] = useState(item?.username ?? "");
+  const [nombre, setNombre] = useState(item?.nombre ?? "");
+  const [password, setPassword] = useState("");
+  const [roleId, setRoleId] = useState<number>(item?.roleId ?? roles[0]?.id ?? 0);
+  const [activo, setActivo] = useState<boolean>(item?.activo ?? true);
+  const [err, setErr] = useState<string | null>(null);
+  const isEdit = !!item;
+
+  const submit = () => {
+    if (!isEdit && !username.trim()) { setErr("El usuario es obligatorio"); return; }
+    if (!isEdit && password.length < 6) { setErr("La contraseña debe tener al menos 6 caracteres"); return; }
+    if (isEdit && password && password.length < 6) { setErr("La contraseña debe tener al menos 6 caracteres"); return; }
+    if (!roleId) { setErr("Seleccioná un rol"); return; }
+    onSave({
+      username: isEdit ? undefined : username.trim(),
+      nombre: nombre.trim() || undefined,
+      password: password ? password : undefined,
+      roleId,
+      activo,
+    });
+  };
+
+  return (
+    <div className="overlay">
+      <div className="modal" style={{ maxWidth: 440 }}>
+        <div className="mh">
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <Ico n="users" s={15} c="var(--em)" />
+            <span className="mt">{isEdit ? "Editar usuario" : "Nuevo usuario"}</span>
+          </div>
+          <button className="btni" onClick={onClose}><Ico n="x" s={15} /></button>
+        </div>
+        <div className="mb" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className="fg">
+            <label className="fl">Usuario</label>
+            <input className="fi" value={username} disabled={isEdit}
+              placeholder="usuario" autoComplete="off"
+              onChange={e => { setUsername(e.target.value); setErr(null); }} />
+          </div>
+          <div className="fg">
+            <label className="fl">Nombre</label>
+            <input className="fi" value={nombre} placeholder="Nombre completo"
+              onChange={e => setNombre(e.target.value)} />
+          </div>
+          <div className="fg">
+            <label className="fl">{isEdit ? "Nueva contraseña (opcional)" : "Contraseña"}</label>
+            <input className="fi" type="password" value={password} autoComplete="new-password"
+              placeholder={isEdit ? "Dejar en blanco para no cambiar" : "Mínimo 6 caracteres"}
+              onChange={e => { setPassword(e.target.value); setErr(null); }} />
+          </div>
+          <div className="fg">
+            <label className="fl">Rol</label>
+            <select className="fi" value={roleId} onChange={e => setRoleId(Number(e.target.value))}>
+              {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--t2)", cursor: "pointer" }}>
+            <input type="checkbox" checked={activo} onChange={e => setActivo(e.target.checked)} />
+            Usuario activo
+          </label>
+          {err && <div className="lerr"><Ico n="alert" s={13} c="var(--ro)" />{err}</div>}
+        </div>
+        <div className="mf">
+          <button className="btn" onClick={onClose}>Cancelar</button>
+          <button className="btn btnp" onClick={submit}><Ico n="check" s={14} c="#fff" />Guardar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Admin: Role modal (permissions matrix) ─────────────────────
+function RoleModal({ item, onSave, onClose }: {
+  item: Role | null;
+  onSave: (form: { name: string; permissions: RolePermissions }) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(item?.name ?? "");
+  const [perms, setPerms] = useState<RolePermissions>(() => {
+    const base: RolePermissions = {};
+    for (const m of MODULES) base[m] = { ...(item?.permissions?.[m] ?? emptyPerm()) };
+    return base;
+  });
+  const [err, setErr] = useState<string | null>(null);
+
+  const toggle = (m: ModuleId, a: PermAction) =>
+    setPerms(p => ({ ...p, [m]: { ...p[m], [a]: !p[m][a] } }));
+
+  const submit = () => {
+    if (!name.trim()) { setErr("El nombre del rol es obligatorio"); return; }
+    onSave({ name: name.trim(), permissions: perms });
+  };
+
+  return (
+    <div className="overlay">
+      <div className="modal" style={{ maxWidth: 560 }}>
+        <div className="mh">
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <Ico n="shield" s={15} c="var(--em)" />
+            <span className="mt">{item ? "Editar rol" : "Nuevo rol"}</span>
+          </div>
+          <button className="btni" onClick={onClose}><Ico n="x" s={15} /></button>
+        </div>
+        <div className="mb" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div className="fg">
+            <label className="fl">Nombre del rol</label>
+            <input className="fi" value={name} placeholder="Ej: Supervisor"
+              onChange={e => { setName(e.target.value); setErr(null); }} />
+          </div>
+          <div>
+            <div className="fl" style={{ marginBottom: 8 }}>Permisos por módulo</div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr style={{ color: "var(--t3)", textAlign: "left" }}>
+                  <th style={{ padding: "4px 6px", fontWeight: 600 }}>Módulo</th>
+                  {(["view", "create", "edit", "delete"] as PermAction[]).map(a => (
+                    <th key={a} style={{ padding: "4px 6px", fontWeight: 600, textAlign: "center" }}>{ACTION_LABELS[a]}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {MODULES.map(m => (
+                  <tr key={m} style={{ borderTop: "1px solid var(--bo)" }}>
+                    <td style={{ padding: "6px", color: "var(--t2)", fontWeight: 600 }}>{MODULE_LABELS[m]}</td>
+                    {(["view", "create", "edit", "delete"] as PermAction[]).map(a => (
+                      <td key={a} style={{ padding: "6px", textAlign: "center" }}>
+                        <input type="checkbox" checked={perms[m][a]} onChange={() => toggle(m, a)} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {err && <div className="lerr"><Ico n="alert" s={13} c="var(--ro)" />{err}</div>}
+        </div>
+        <div className="mf">
+          <button className="btn" onClick={onClose}>Cancelar</button>
+          <button className="btn btnp" onClick={submit}><Ico n="check" s={14} c="#fff" />Guardar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Admin page ─────────────────────────────────────────────────
+function AdminPage({ can, toast, currentUserId }: {
+  can: (m: ModuleId, a: PermAction) => boolean;
+  toast: (msg: string, type?: string) => void;
+  currentUserId: number | null;
+}) {
+  const qc = useQueryClient();
+  const [sub, setSub] = useState<"users" | "roles">("users");
+  const [userModal, setUserModal] = useState<{ item: User | null } | null>(null);
+  const [roleModal, setRoleModal] = useState<{ item: Role | null } | null>(null);
+
+  const usersQ = useQuery({ ...getListUsersQueryOptions() });
+  const rolesQ = useQuery({ ...getListRolesQueryOptions() });
+  const users = usersQ.data ?? [];
+  const roles = rolesQ.data ?? [];
+
+  const { mutate: createUser } = useCreateUser();
+  const { mutate: updateUser } = useUpdateUser();
+  const { mutate: deleteUser } = useDeleteUser();
+  const { mutate: createRole } = useCreateRole();
+  const { mutate: updateRole } = useUpdateRole();
+  const { mutate: deleteRole } = useDeleteRole();
+
+  const invUsers = () => qc.invalidateQueries({ queryKey: getListUsersQueryOptions().queryKey });
+  const invRoles = () => qc.invalidateQueries({ queryKey: getListRolesQueryOptions().queryKey });
+
+  const onErr = (e: unknown, fallback: string) => {
+    const status = (e as { status?: number })?.status;
+    const data = (e as { data?: { error?: string } })?.data;
+    toast(data?.error || (status === 409 ? "Ya existe un registro con ese nombre" : fallback), "err");
+  };
+
+  const saveUser = (form: { username?: string; nombre?: string; password?: string; roleId: number; activo: boolean }) => {
+    const editing = userModal?.item;
+    if (editing) {
+      updateUser(
+        { id: editing.id, data: { nombre: form.nombre, password: form.password, roleId: form.roleId, activo: form.activo } },
+        { onSuccess: () => { invUsers(); toast("Usuario actualizado", "inf"); setUserModal(null); }, onError: e => onErr(e, "No se pudo actualizar el usuario") },
+      );
+    } else {
+      createUser(
+        { data: { username: form.username!, nombre: form.nombre, password: form.password!, roleId: form.roleId, activo: form.activo } },
+        { onSuccess: () => { invUsers(); toast("Usuario creado"); setUserModal(null); }, onError: e => onErr(e, "No se pudo crear el usuario") },
+      );
+    }
+  };
+
+  const removeUser = (u: User) => {
+    if (u.id === currentUserId) { toast("No podés eliminar tu propio usuario", "err"); return; }
+    if (!window.confirm(`¿Eliminar al usuario "${u.username}"?`)) return;
+    deleteUser({ id: u.id }, { onSuccess: () => { invUsers(); toast(`Usuario "${u.username}" eliminado`, "err"); }, onError: e => onErr(e, "No se pudo eliminar el usuario") });
+  };
+
+  const saveRole = (form: { name: string; permissions: RolePermissions }) => {
+    const editing = roleModal?.item;
+    if (editing) {
+      updateRole(
+        { id: editing.id, data: { name: form.name, permissions: form.permissions } },
+        { onSuccess: () => { invRoles(); toast("Rol actualizado", "inf"); setRoleModal(null); }, onError: e => onErr(e, "No se pudo actualizar el rol") },
+      );
+    } else {
+      createRole(
+        { data: { name: form.name, permissions: form.permissions } },
+        { onSuccess: () => { invRoles(); toast("Rol creado"); setRoleModal(null); }, onError: e => onErr(e, "No se pudo crear el rol") },
+      );
+    }
+  };
+
+  const removeRole = (r: Role) => {
+    if (r.isSystem) { toast("No se puede eliminar un rol del sistema", "err"); return; }
+    if (!window.confirm(`¿Eliminar el rol "${r.name}"? Los usuarios con este rol deben reasignarse.`)) return;
+    deleteRole({ id: r.id }, { onSuccess: () => { invRoles(); invUsers(); toast(`Rol "${r.name}" eliminado`, "err"); }, onError: e => onErr(e, "No se pudo eliminar el rol. Puede tener usuarios asignados.") });
+  };
+
+  const permCount = (r: Role) => MODULES.filter(m => r.permissions?.[m]?.view).length;
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div className="sub-tab-bar" style={{ marginBottom: 0 }}>
+          <button className={`sub-tab${sub === "users" ? " active" : ""}`} onClick={() => setSub("users")}>Usuarios</button>
+          <button className={`sub-tab${sub === "roles" ? " active" : ""}`} onClick={() => setSub("roles")}>Roles</button>
+        </div>
+        {sub === "users" && can("admin", "create") && (
+          <button className="btn btnp" style={{ fontSize: 11, padding: "5px 14px" }} onClick={() => setUserModal({ item: null })}>
+            <Ico n="plus" s={13} c="#fff" />Nuevo usuario
+          </button>
+        )}
+        {sub === "roles" && can("admin", "create") && (
+          <button className="btn btnp" style={{ fontSize: 11, padding: "5px 14px" }} onClick={() => setRoleModal({ item: null })}>
+            <Ico n="plus" s={13} c="#fff" />Nuevo rol
+          </button>
+        )}
+      </div>
+
+      {sub === "users" && (
+        <div className="tw">
+          <div className="th"><Ico n="users" s={14} c="var(--bl)" /><span className="tt">Usuarios</span><span style={{ marginLeft: 6, fontSize: 11, color: "var(--t3)" }}>{users.length}</span></div>
+          {usersQ.isLoading ? <div className="empty">Cargando…</div> : users.length === 0 ? <div className="empty">Sin usuarios</div> : users.map(u => (
+            <div key={u.id} className="ri">
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: aColor(u.username), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{inits(u.nombre || u.username)}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--t)" }}>{u.nombre || u.username}
+                  <span style={{ fontSize: 11, color: "var(--t3)", fontFamily: "monospace", marginLeft: 6 }}>@{u.username}</span>
+                </div>
+                <div style={{ fontSize: 11, color: "var(--t3)" }}>{u.roleName}</div>
+              </div>
+              <span style={{ fontSize: 10, padding: "1px 8px", borderRadius: 99, background: u.activo ? "rgba(16,185,129,.12)" : "rgba(100,116,139,.14)", color: u.activo ? "var(--em)" : "var(--t3)", border: `1px solid ${u.activo ? "rgba(16,185,129,.3)" : "rgba(100,116,139,.3)"}` }}>{u.activo ? "Activo" : "Inactivo"}</span>
+              {can("admin", "edit") && <button className="btni" title="Editar" onClick={() => setUserModal({ item: u })}><Ico n="pencil" s={14} /></button>}
+              {can("admin", "delete") && <button className="btni" title="Eliminar" onClick={() => removeUser(u)}><Ico n="trash" s={14} c="var(--ro)" /></button>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {sub === "roles" && (
+        <div className="tw">
+          <div className="th"><Ico n="shield" s={14} c="var(--em)" /><span className="tt">Roles</span><span style={{ marginLeft: 6, fontSize: 11, color: "var(--t3)" }}>{roles.length}</span></div>
+          {rolesQ.isLoading ? <div className="empty">Cargando…</div> : roles.length === 0 ? <div className="empty">Sin roles</div> : roles.map(r => (
+            <div key={r.id} className="ri">
+              <Ico n="shield" s={16} c={r.isSystem ? "var(--am)" : "var(--t3)"} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--t)" }}>{r.name}
+                  {r.isSystem && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 99, background: "rgba(245,158,11,.12)", color: "var(--am)", marginLeft: 8 }}>Sistema</span>}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--t3)" }}>{permCount(r)} módulo{permCount(r) !== 1 ? "s" : ""} con acceso</div>
+              </div>
+              {can("admin", "edit") && <button className="btni" title="Editar" onClick={() => setRoleModal({ item: r })}><Ico n="pencil" s={14} /></button>}
+              {can("admin", "delete") && !r.isSystem && <button className="btni" title="Eliminar" onClick={() => removeRole(r)}><Ico n="trash" s={14} c="var(--ro)" /></button>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {userModal && <UserModal item={userModal.item} roles={roles} onSave={saveUser} onClose={() => setUserModal(null)} />}
+      {roleModal && <RoleModal item={roleModal.item} onSave={saveRole} onClose={() => setRoleModal(null)} />}
+    </div>
+  );
+}
+
 // ── Root App ──────────────────────────────────────────────────
 export default function App() {
-  const [auth, setAuth] = useState(() => {
-    try { return sessionStorage.getItem("mds_auth") === "1"; } catch { return false; }
-  });
+  const queryClient = useQueryClient();
   const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [gpvList, setGpvList] = useState<GPVEntry[]>([]);
   const [tecnicos, setTecnicos] = useState<string[]>(DEFAULT_TECNICOS);
@@ -1922,12 +2294,32 @@ export default function App() {
   const [collapsed, setCol] = useState(false);
   const [search, setSearch] = useState("");
   const [toasts, setToasts] = useState<{ id: number; msg: string; type: string }[]>([]);
-  const [modal, setModal] = useState<{ type: string; item: Equipo | GPVEntry | null } | null>(null);
+  const [modal, setModal] = useState<{ type: string; item: Equipo | GPVEntry | null; canEdit?: boolean } | null>(null);
   const [modalE, setModalE] = useState<Equipo | null>(null);
   const [confirmState, setConfirm] = useState<{ source: string; item: Equipo | GPVEntry; msg: string } | null>(null);
   const [showTecModal, setShowTecModal] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastAppliedAtRef = useRef<string | null>(null);
+
+  // ── Session / auth ──
+  const { data: session, isLoading: sessionLoading } = useQuery({
+    ...getGetCurrentUserQueryOptions(),
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+  const auth = !!session;
+  const { mutate: logout } = useLogout();
+
+  const toast = useCallback((msg: string, type = "ok") => {
+    const id = Date.now() + Math.random();
+    setToasts(t => [...t, { id, msg, type }]);
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3200);
+  }, []);
+
+  const can = useCallback((module: ModuleId, action: PermAction): boolean => {
+    const perms = (session as AuthSession | undefined)?.role?.permissions?.[module];
+    return !!perms?.[action];
+  }, [session]);
 
   const { data: apiState, isLoading: apiLoading, isFetching } = useQuery({
     ...getGetTallerStateQueryOptions(),
@@ -1937,7 +2329,7 @@ export default function App() {
   });
   const { mutate: saveToApi } = useSaveTallerState();
 
-  const applyApiState = useCallback((s: typeof apiState) => {
+  const applyApiState = useCallback((s: TallerState | undefined) => {
     if (!s) return;
     setEquipos((s.equipos as Equipo[]).map(normalizeEquipo));
     setGpvList(s.gpvList as GPVEntry[]);
@@ -1968,23 +2360,44 @@ export default function App() {
 
   const loading = auth && (apiLoading || !loaded);
 
+  const handleSaveError = useCallback((err: unknown) => {
+    const status = (err as { status?: number })?.status;
+    if (status === 401) {
+      toast("Tu sesión expiró. Iniciá sesión nuevamente.", "err");
+      queryClient.clear();
+      return;
+    }
+    if (status === 409) {
+      const conflict = (err as { data?: { current?: TallerState } })?.data;
+      if (conflict?.current) {
+        applyApiState(conflict.current);
+        toast("Otro usuario guardó cambios. Se recargó la última versión.", "err");
+      } else {
+        toast("Conflicto al guardar. Recargá la página.", "err");
+      }
+      return;
+    }
+    toast("No se pudieron guardar los cambios. Reintentá.", "err");
+  }, [toast, queryClient, applyApiState]);
+
   const save = useCallback((eq: Equipo[], gv: GPVEntry[], tecs?: string[], lay?: LayoutState) => {
     const techList = tecs ?? tecnicos;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
       setLayout(cur => {
         const layoutToSave = lay ?? cur;
-        saveToApi({ data: { equipos: eq as never[], gpvList: gv as never[], tecnicos: techList, layout: layoutToSave as never } });
+        saveToApi(
+          { data: { equipos: eq as never[], gpvList: gv as never[], tecnicos: techList, layout: layoutToSave as never, expectedUpdatedAt: lastAppliedAtRef.current } },
+          {
+            onSuccess: (res) => { lastAppliedAtRef.current = (res as TallerState)?.updatedAt ?? null; },
+            onError: handleSaveError,
+          },
+        );
         return cur;
       });
     }, 600);
-  }, [tecnicos, saveToApi]);
-
-  const toast = useCallback((msg: string, type = "ok") => {
-    const id = Date.now();
-    setToasts(t => [...t, { id, msg, type }]);
-    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3200);
-  }, []);
+  }, [tecnicos, saveToApi, handleSaveError]);
 
   const upEq = (fn: ((p: Equipo[]) => Equipo[]) | Equipo[]) => {
     setEquipos(prev => {
@@ -2006,6 +2419,7 @@ export default function App() {
   const gpvAlertaCnt = gpvList.filter(g => g.fechaEntrega && dGPV(g.fechaEntrega) >= 0 && dGPV(g.fechaEntrega) <= 15).length;
 
   const saveTaller = (form: Partial<Equipo>) => {
+    if (!(modal?.canEdit ?? false)) { toast("No tenés permiso para esta acción", "err"); return; }
     if ((modal as any)?.item) {
       upEq(p => p.map(e => e.id === (modal as any).item.id ? { ...(modal as any).item, ...form } : e));
       toast("Actualizado", "inf");
@@ -2017,6 +2431,7 @@ export default function App() {
   };
 
   const handleListo = (eq: Equipo) => {
+    if (!can("taller", "edit")) { toast("No tenés permiso para esta acción", "err"); return; }
     if (eq.destino === "venta") {
       upEq(p => p.map(e => e.id === eq.id ? { ...e, estado: ESTADO_DISP, enVentaDesde: new Date().toISOString().slice(0, 10) } : e));
       toast(`${eq.modelo} → disponibles`);
@@ -2027,6 +2442,7 @@ export default function App() {
   };
 
   const confirmarEntrega = (fecha: string, cliente: string) => {
+    if (!can("venta", "edit")) { toast("No tenés permiso para esta acción", "err"); return; }
     const eq = modalE!;
     const nE = equipos.filter(e => e.id !== eq.id);
     const nG: GPVEntry[] = [{ id: Date.now(), modelo: eq.modelo, interno: eq.interno, cliente, fechaEntrega: fecha, observacion: eq.observacion, estado: ESTADO_VEND }, ...gpvList];
@@ -2036,6 +2452,7 @@ export default function App() {
   };
 
   const saveGPV = (form: Partial<GPVEntry>) => {
+    if (!(modal?.canEdit ?? false)) { toast("No tenés permiso para esta acción", "err"); return; }
     if ((modal as any)?.item) {
       upGpv(g => g.map(x => x.id === (modal as any).item.id ? { ...(modal as any).item, ...form } : x));
       toast("GPV actualizada", "inf");
@@ -2048,6 +2465,8 @@ export default function App() {
 
   const doDelete = () => {
     const { source, item } = confirmState!;
+    const allowed = source === "eq" ? can("taller", "delete") : can("venta", "delete");
+    if (!allowed) { toast("No tenés permiso para esta acción", "err"); setConfirm(null); return; }
     if (source === "eq") upEq(p => p.filter(e => e.id !== (item as Equipo).id));
     else upGpv(g => g.filter(x => x.id !== (item as GPVEntry).id));
     toast(`"${item.modelo}" eliminado`, "err");
@@ -2063,14 +2482,16 @@ export default function App() {
     toast("Lista de técnicos actualizada", "inf");
   };
 
-  const navItems = [
+  const allNavItems = [
     { id: "dashboard", label: "Dashboard",  icon: "dashboard" },
     { id: "taller",    label: "Taller",     icon: "wrench",   count: enTallerCnt },
     { id: "venta",     label: "Venta/GPV",  icon: "tag",      alert: gpvAlertaCnt, count: gpvList.length + disp.length },
     { id: "kpis",      label: "KPIs",       icon: "kpi" },
     { id: "layout",    label: "Layout",     icon: "bar" },
     { id: "tecnicos",  label: "Técnicos",   icon: "users",    count: tecnicos.length },
+    { id: "admin",     label: "Administración", icon: "shield" },
   ];
+  const navItems = allNavItems.filter(n => can(n.id as ModuleId, "view"));
   const titles: Record<string, [string, string]> = {
     dashboard: ["Dashboard", "Resumen general"],
     taller:    ["Taller", "Equipos en reparación"],
@@ -2078,23 +2499,43 @@ export default function App() {
     kpis:      ["KPIs — Equipos", "Indicadores de rendimiento operativo"],
     layout:    ["Layout del Taller", "Mapa visual de posiciones"],
     tecnicos:  ["Técnicos", "Gestión del equipo"],
+    admin:     ["Administración", "Usuarios, roles y permisos"],
   };
 
+  // Keep the active tab valid for the current user's permissions
+  useEffect(() => {
+    if (!auth) return;
+    const viewable = allNavItems.filter(n => n.id !== "tecnicos" && can(n.id as ModuleId, "view")).map(n => n.id);
+    if (viewable.length && !viewable.includes(tab)) setTab(viewable[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth, session, tab]);
+
   const handleLogin = () => {
-    setAuth(true);
-    try { sessionStorage.setItem("mds_auth", "1"); } catch { /* ignore */ }
+    queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryOptions().queryKey });
   };
 
   const handleLogout = () => {
-    setAuth(false);
-    try { sessionStorage.removeItem("mds_auth"); } catch { /* ignore */ }
+    logout(undefined, {
+      onSettled: () => {
+        setLoaded(false);
+        queryClient.clear();
+      },
+    });
   };
+
+  const currentUser = (session as AuthSession | undefined)?.user;
 
   return (
     <div className="app">
       <style>{CSS}</style>
 
-      {!auth && <Login onLogin={handleLogin} />}
+      {!auth && sessionLoading && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", gap: 10, color: "var(--t3)", fontSize: 14 }}>
+          <Ico n="wrench" s={18} c="var(--t3)" />Verificando sesión…
+        </div>
+      )}
+
+      {!auth && !sessionLoading && <Login onLogin={handleLogin} />}
 
       {auth && loading && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", gap: 10, color: "var(--t3)", fontSize: 14 }}>
@@ -2135,11 +2576,14 @@ export default function App() {
             <div className="sbft">
               {!collapsed ? (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
-                  <span style={{ fontSize: 11, color: "var(--t3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Movimiento de Suelo</span>
-                  <button className="btni" onClick={handleLogout}><Ico n="logout" s={15} /></button>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser?.nombre || currentUser?.username || "Usuario"}</div>
+                    <div style={{ fontSize: 10, color: "var(--t3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser?.roleName || "—"}</div>
+                  </div>
+                  <button className="btni" title="Cerrar sesión" onClick={handleLogout}><Ico n="logout" s={15} /></button>
                 </div>
               ) : (
-                <button className="btni" onClick={handleLogout}><Ico n="logout" s={15} /></button>
+                <button className="btni" title="Cerrar sesión" onClick={handleLogout}><Ico n="logout" s={15} /></button>
               )}
             </div>
           </aside>
@@ -2168,13 +2612,14 @@ export default function App() {
 
             <main className="content">
               {tab === "dashboard" && <Dashboard equipos={equipos} gpvList={gpvList} tecnicos={tecnicos} />}
-              {tab === "kpis" && <KPIsPage equipos={equipos} gpvList={gpvList} tecnicos={tecnicos} onOpenEquipo={m => setModal({ type: "taller", item: m })} />}
+              {tab === "kpis" && <KPIsPage equipos={equipos} gpvList={gpvList} tecnicos={tecnicos} onOpenEquipo={m => setModal({ type: "taller", item: m, canEdit: can("taller", "edit") })} />}
               {tab === "layout" && (
                 <LayoutPage
                   equipos={equipos}
                   layout={layout}
+                  canEdit={can("layout", "edit")}
                   onUpdateLayout={nl => { setLayout(nl); setEquipos(eq => { setGpvList(gv => { save(eq, gv, undefined, nl); return gv; }); return eq; }); }}
-                  onOpenEquipo={m => setModal({ type: "taller", item: m })}
+                  onOpenEquipo={m => setModal({ type: "taller", item: m, canEdit: can("taller", "edit") })}
                 />
               )}
               {tab === "taller" && (
@@ -2182,8 +2627,11 @@ export default function App() {
                   equipos={equipos}
                   search={search}
                   tecnicos={tecnicos}
-                  onAdd={() => setModal({ type: "taller", item: null })}
-                  onEdit={m => setModal({ type: "taller", item: m })}
+                  canCreate={can("taller", "create")}
+                  canEdit={can("taller", "edit")}
+                  canDelete={can("taller", "delete")}
+                  onAdd={() => setModal({ type: "taller", item: null, canEdit: can("taller", "create") })}
+                  onEdit={m => setModal({ type: "taller", item: m, canEdit: can("taller", "edit") })}
                   onDelete={m => setConfirm({ source: "eq", item: m, msg: `Eliminará "${m.modelo}" del taller.` })}
                   onListo={handleListo}
                 />
@@ -2193,13 +2641,17 @@ export default function App() {
                   disponibles={disp}
                   gpvList={gpvList}
                   search={search}
+                  canCreate={can("venta", "create")}
+                  canEdit={can("venta", "edit")}
+                  canDelete={can("venta", "delete")}
                   onEntrega={m => setModalE(m)}
-                  onEditDisp={m => setModal({ type: "taller", item: m })}
-                  onEditGPV={g => setModal({ type: "gpv", item: g })}
+                  onEditDisp={m => setModal({ type: "taller", item: m, canEdit: can("venta", "edit") })}
+                  onEditGPV={g => setModal({ type: "gpv", item: g, canEdit: can("venta", "edit") })}
                   onDeleteGPV={g => setConfirm({ source: "gpv", item: g, msg: `Eliminará "${g.modelo}" del registro GPV.` })}
-                  onAddGPV={() => setModal({ type: "gpv", item: null })}
+                  onAddGPV={() => setModal({ type: "gpv", item: null, canEdit: can("venta", "create") })}
                 />
               )}
+              {tab === "admin" && <AdminPage can={can} toast={toast} currentUserId={currentUser?.id ?? null} />}
               <Toasts toasts={toasts} />
             </main>
 
@@ -2210,12 +2662,13 @@ export default function App() {
                 onSave={saveTaller}
                 onClose={() => setModal(null)}
                 tecnicos={tecnicos}
+                canEdit={modal.canEdit ?? false}
               />
             )}
-            {modal?.type === "gpv" && <ModalGPV item={modal.item as GPVEntry | null} onSave={saveGPV} onClose={() => setModal(null)} />}
+            {modal?.type === "gpv" && <ModalGPV item={modal.item as GPVEntry | null} onSave={saveGPV} onClose={() => setModal(null)} canEdit={modal.canEdit ?? false} />}
             {modalE && <ModalEntrega equipo={modalE} onConfirm={confirmarEntrega} onClose={() => setModalE(null)} />}
             {confirmState && <Confirm msg={confirmState.msg} onOk={doDelete} onCancel={() => setConfirm(null)} />}
-            {showTecModal && <TecnicosModal tecnicos={tecnicos} onSave={saveTecnicos} onClose={() => setShowTecModal(false)} />}
+            {showTecModal && <TecnicosModal tecnicos={tecnicos} onSave={saveTecnicos} onClose={() => setShowTecModal(false)} canEdit={can("tecnicos", "edit")} />}
           </div>
         </div>
       )}
