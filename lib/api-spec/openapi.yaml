@@ -135,12 +135,17 @@ components:
         tecnicos:
           type: array
           items: { type: string }
+        layout:
+          type: object
+          additionalProperties:
+            type: number
         updatedAt:
           type: ["string", "null"]
       required:
         - equipos
         - gpvList
         - tecnicos
+        - layout
 
     TallerStateInput:
       type: object
@@ -156,7 +161,12 @@ components:
         tecnicos:
           type: array
           items: { type: string }
+        layout:
+          type: object
+          additionalProperties:
+            type: number
       required:
         - equipos
         - gpvList
         - tecnicos
+        - layout

@@ -7,9 +7,11 @@
  */
 import type { Equipo } from './equipo';
 import type { GPVEntry } from './gPVEntry';
+import type { TallerStateInputLayout } from './tallerStateInputLayout';
 
 export interface TallerStateInput {
   equipos: Equipo[];
   gpvList: GPVEntry[];
   tecnicos: string[];
+  layout: TallerStateInputLayout;
 }

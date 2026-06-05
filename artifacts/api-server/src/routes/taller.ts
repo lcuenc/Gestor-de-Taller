@@ -20,6 +20,7 @@ router.get("/taller/state", async (req, res): Promise<void> => {
       equipos: [],
       gpvList: [],
       tecnicos: DEFAULT_TECNICOS,
+      layout: {},
       updatedAt: null,
     }));
     return;
@@ -29,6 +30,7 @@ router.get("/taller/state", async (req, res): Promise<void> => {
     equipos: row.equipos,
     gpvList: row.gpvList,
     tecnicos: row.tecnicos,
+    layout: row.layout ?? {},
     updatedAt: row.updatedAt?.toISOString() ?? null,
   }));
 });
@@ -41,21 +43,21 @@ router.put("/taller/state", async (req, res): Promise<void> => {
     return;
   }
 
-  const { equipos, gpvList, tecnicos } = parsed.data;
+  const { equipos, gpvList, tecnicos, layout } = parsed.data;
   const existing = await db.select().from(tallerStateTable).limit(1);
 
   let row;
   if (existing.length) {
     const updated = await db
       .update(tallerStateTable)
-      .set({ equipos, gpvList, tecnicos })
+      .set({ equipos, gpvList, tecnicos, layout })
       .where(eq(tallerStateTable.id, existing[0].id))
       .returning();
     row = updated[0];
   } else {
     const inserted = await db
       .insert(tallerStateTable)
-      .values({ equipos, gpvList, tecnicos })
+      .values({ equipos, gpvList, tecnicos, layout })
       .returning();
     row = inserted[0];
   }
@@ -64,6 +66,7 @@ router.put("/taller/state", async (req, res): Promise<void> => {
     equipos: row.equipos,
     gpvList: row.gpvList,
     tecnicos: row.tecnicos,
+    layout: row.layout ?? {},
     updatedAt: row.updatedAt?.toISOString() ?? null,
   }));
 });

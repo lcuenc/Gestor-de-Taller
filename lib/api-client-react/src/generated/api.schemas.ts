@@ -36,17 +36,23 @@ export interface GPVEntry {
   estado: string;
 }
 
+export type TallerStateLayout = {[key: string]: number};
+
 export interface TallerState {
   equipos: Equipo[];
   gpvList: GPVEntry[];
   tecnicos: string[];
+  layout: TallerStateLayout;
   /** @nullable */
   updatedAt?: string | null;
 }
+
+export type TallerStateInputLayout = {[key: string]: number};
 
 export interface TallerStateInput {
   equipos: Equipo[];
   gpvList: GPVEntry[];
   tecnicos: string[];
+  layout: TallerStateInputLayout;
 }
 

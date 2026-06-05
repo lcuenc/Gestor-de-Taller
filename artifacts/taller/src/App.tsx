@@ -241,6 +241,16 @@ html,body,#root{margin:0;padding:0;width:100%;height:100%;overflow:hidden;backgr
 .app .bar-fill{height:100%;border-radius:99px;transition:width .4s}
 .app .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
 .app .grid22{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.app .sub-tab-bar{display:flex;gap:4px;margin-bottom:14px;background:var(--bg3);border-radius:var(--r2);padding:3px;width:fit-content}
+.app .sub-tab{background:none;border:none;color:var(--t3);font-size:12px;font-weight:600;padding:5px 16px;border-radius:var(--r);cursor:pointer;transition:all .15s}
+.app .sub-tab.active{background:var(--bg2);color:var(--t);box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.app .sub-tab:hover:not(.active){color:var(--t2)}
+.app .layout-wrap{overflow-x:auto;background:var(--bg3);border:1px solid var(--bo);border-radius:var(--r2);padding:12px}
+.app .layout-slot{cursor:pointer}
+.app .layout-slot:hover rect{filter:brightness(1.15)}
+.app .slot-picker{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:200}
+.app .slot-picker-box{background:var(--bg2);border:1px solid var(--bo);border-radius:var(--r2);width:430px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
+.app .slot-picker-list{overflow-y:auto;flex:1}
 .app .sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .app .ri{display:flex;align-items:center;gap:11px;padding:8px 16px;border-bottom:1px solid var(--bo)}
 .app .ri:last-child{border-bottom:none}
@@ -1257,42 +1267,60 @@ function MiniBar({ value, max, color }: { value: number; max: number; color: str
   );
 }
 
-function KPIsPage({ equipos, gpvList }: { equipos: Equipo[]; gpvList: GPVEntry[] }) {
-  const activos = equipos.filter(e => ESTADOS_ACTIVOS.has(e.estado));
+type KpiSubTab = "general" | "flota" | "venta";
+
+function KPIsPage({ equipos, gpvList, tecnicos: _tecList, onOpenEquipo }: {
+  equipos: Equipo[];
+  gpvList: GPVEntry[];
+  tecnicos: string[];
+  onOpenEquipo: (e: Equipo) => void;
+}) {
+  const [subTab, setSubTab] = useState<KpiSubTab>("general");
+  const allActivos = equipos.filter(e => ESTADOS_ACTIVOS.has(e.estado));
+  const scope = subTab === "flota"
+    ? allActivos.filter(e => e.destino === "alquiler")
+    : subTab === "venta"
+    ? allActivos.filter(e => e.destino === "venta")
+    : allActivos;
   const total = equipos.length;
 
+  // ── Dept effort (General only) ──
+  const asigFlota = allActivos.filter(e => e.destino === "alquiler").reduce((s, e) => s + (e.tecnicos?.filter(t => (t as string)?.trim()).length ?? 0), 0);
+  const asigVenta = allActivos.filter(e => e.destino === "venta").reduce((s, e) => s + (e.tecnicos?.filter(t => (t as string)?.trim()).length ?? 0), 0);
+  const totalAsig = asigFlota + asigVenta || 1;
+  const flotaPct  = Math.round(asigFlota / totalAsig * 100);
+  const ventaPct  = 100 - flotaPct;
+
   const byEstado = [...ESTADOS_TALLER, ESTADO_LISTO].map(s => ({
-    s, count: equipos.filter(e => e.estado === s).length,
+    s, count: scope.filter(e => e.estado === s).length,
     color: ST[s]?.color || "var(--t3)",
   }));
   const maxByEstado = Math.max(1, ...byEstado.map(x => x.count));
 
-  const alquiler = activos.filter(e => e.destino === "alquiler").length;
-  const venta    = activos.filter(e => e.destino === "venta").length;
-  const totalA   = alquiler + venta || 1;
-
-  const prioRojo     = activos.filter(e => e.prioridad === "rojo").length;
-  const prioAmarillo = activos.filter(e => e.prioridad === "amarillo").length;
-  const prioNinguna  = activos.filter(e => e.prioridad === "ninguna" || !e.prioridad).length;
+  const prioRojo     = scope.filter(e => e.prioridad === "rojo").length;
+  const prioAmarillo = scope.filter(e => e.prioridad === "amarillo").length;
+  const prioNinguna  = scope.filter(e => e.prioridad === "ninguna" || !e.prioridad).length;
 
   const ageBuckets = [
-    { label: "0-7 días",   count: activos.filter(e => dDesde(e.fechaIngreso) < 7).length,                                              color: "#10b981" },
-    { label: "7-14 días",  count: activos.filter(e => dDesde(e.fechaIngreso) >= 7  && dDesde(e.fechaIngreso) < 14).length,             color: "#3b82f6" },
-    { label: "14-30 días", count: activos.filter(e => dDesde(e.fechaIngreso) >= 14 && dDesde(e.fechaIngreso) < 30).length,             color: "#f59e0b" },
-    { label: "+30 días",   count: activos.filter(e => dDesde(e.fechaIngreso) >= 30).length,                                            color: "#ef4444" },
-  ];
+    { label: "0-7d",   min: 0,  max: 7,        color: "#10b981" },
+    { label: "7-14d",  min: 7,  max: 14,       color: "#3b82f6" },
+    { label: "14-30d", min: 14, max: 30,       color: "#f59e0b" },
+    { label: "30-60d", min: 30, max: 60,       color: "#f97316" },
+    { label: "60-90d", min: 60, max: 90,       color: "#ef4444" },
+    { label: "+90d",   min: 90, max: Infinity, color: "#dc2626" },
+  ].map(b => ({ ...b, count: scope.filter(e => { const d = dDesde(e.fechaIngreso); return d >= b.min && d < b.max; }).length }));
   const maxAge = Math.max(1, ...ageBuckets.map(b => b.count));
 
-  const avgTotal = activos.length
-    ? Math.round(activos.reduce((a, e) => a + dDesde(e.fechaIngreso), 0) / activos.length)
+  const avgTotal = scope.length
+    ? Math.round(scope.reduce((a, e) => a + dDesde(e.fechaIngreso), 0) / scope.length)
     : 0;
 
-  const bottlenecks = [...activos]
+  const bottlenecks = [...scope]
     .sort((a, b) => dDesde(b.fechaIngreso) - dDesde(a.fechaIngreso))
     .slice(0, 6);
 
   const modelMap: Record<string, number> = {};
-  activos.forEach(e => { modelMap[e.modelo] = (modelMap[e.modelo] || 0) + 1; });
+  scope.forEach(e => { modelMap[e.modelo] = (modelMap[e.modelo] || 0) + 1; });
   const topModels = Object.entries(modelMap).sort((a, b) => b[1] - a[1]).slice(0, 7);
   const maxModel = Math.max(1, ...topModels.map(([, c]) => c));
 
@@ -1302,7 +1330,7 @@ function KPIsPage({ equipos, gpvList }: { equipos: Equipo[]; gpvList: GPVEntry[]
   const gpvTotal      = gpvList.length;
 
   const avgByEstado = [...ESTADOS_TALLER, ESTADO_LISTO].map(s => {
-    const items = equipos.filter(e => e.estado === s && e.fechaIngreso);
+    const items = scope.filter(e => e.estado === s && e.fechaIngreso);
     const avg = items.length ? Math.round(items.reduce((a, e) => a + dDesde(e.fechaIngreso), 0) / items.length) : 0;
     return { s, avg, count: items.length, color: ST[s]?.color || "var(--t3)" };
   }).filter(x => x.count > 0);
@@ -1316,22 +1344,53 @@ function KPIsPage({ equipos, gpvList }: { equipos: Equipo[]; gpvList: GPVEntry[]
     </div>
   );
 
+  const tabLbl = subTab === "general" ? "taller" : subTab === "flota" ? "Flota" : "Venta";
+
   return (
     <div>
       <div className="sh">
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: "var(--t)" }}>KPIs — Equipos</div>
-          <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 1 }}>Indicadores de rendimiento operativo · {total} equipo{total !== 1 ? "s" : ""} registrados</div>
+          <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 1 }}>Indicadores de rendimiento · {total} equipo{total !== 1 ? "s" : ""} registrados</div>
         </div>
       </div>
 
+      <div className="sub-tab-bar">
+        {(["general", "flota", "venta"] as KpiSubTab[]).map(t => (
+          <button key={t} className={`sub-tab${subTab === t ? " active" : ""}`} onClick={() => setSubTab(t)}>
+            {t === "general" ? "General" : t === "flota" ? "Flota" : "Venta"}
+          </button>
+        ))}
+      </div>
+
       <div className="kpi-grid">
-        <Card val={activos.length} lbl="En proceso de reparación" color="var(--bl)" />
-        <Card val={avgTotal + "d"} lbl="Promedio de días en taller" color={avgTotal > 20 ? "var(--ro)" : avgTotal > 10 ? "var(--am)" : "var(--em)"} />
+        <Card val={scope.length} lbl={`Activos en ${tabLbl}`} color="var(--bl)" />
+        <Card val={avgTotal + "d"} lbl="Promedio días en taller" color={avgTotal > 20 ? "var(--ro)" : avgTotal > 10 ? "var(--am)" : "var(--em)"} />
         <Card val={prioRojo} lbl="Prioridad alta (urgentes)" color="var(--ro)" sub={prioRojo > 0 ? "Requieren atención" : "Sin urgentes ✓"} />
-        <Card val={gpvPorVencer} lbl="GPV próximas a vencer" color={gpvPorVencer > 0 ? "var(--am)" : "var(--em)"} sub={`de ${gpvTotal} en cartera`} />
-        <Card val={gpvVencidas} lbl="GPV vencidas" color={gpvVencidas > 0 ? "var(--ro)" : "var(--t3)"} />
-        <Card val={`${alquiler}/${venta}`} lbl="Alquiler / Venta activos" color="var(--pu)" sub={venta > 0 ? `${Math.round(venta/totalA*100)}% venta` : "100% alquiler"} />
+        {subTab === "general" ? (
+          <>
+            <Card val={gpvPorVencer} lbl="GPV próximas a vencer" color={gpvPorVencer > 0 ? "var(--am)" : "var(--em)"} sub={`de ${gpvTotal} en cartera`} />
+            <Card val={gpvVencidas} lbl="GPV vencidas" color={gpvVencidas > 0 ? "var(--ro)" : "var(--t3)"} />
+            <div className="kpi-card" style={{ borderTopColor: "var(--pu)" }}>
+              <div style={{ display: "flex", gap: 0, height: 6, borderRadius: 99, overflow: "hidden", marginBottom: 6 }}>
+                <div style={{ flex: flotaPct, background: "var(--bl)" }} />
+                <div style={{ flex: ventaPct, background: "var(--pu)" }} />
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "var(--t)", lineHeight: 1, marginBottom: 4 }}>
+                <span style={{ color: "var(--bl)" }}>{flotaPct}%</span>
+                <span style={{ color: "var(--t3)", fontSize: 14, margin: "0 4px" }}>/</span>
+                <span style={{ color: "var(--pu)" }}>{ventaPct}%</span>
+              </div>
+              <div className="kpi-lbl">Esfuerzo técnico<br /><span style={{ color: "var(--bl)", fontWeight: 600 }}>Flota</span> · <span style={{ color: "var(--pu)", fontWeight: 600 }}>Venta</span></div>
+            </div>
+          </>
+        ) : (
+          <>
+            <Card val={prioAmarillo} lbl="Prioridad media" color="var(--am)" />
+            <Card val={prioNinguna} lbl="Sin prioridad asignada" color="var(--t3)" />
+            <Card val={scope.filter(e => (e.tecnicos as string[])?.some(t => t?.trim())).length} lbl="Con técnico asignado" color="var(--em)" />
+          </>
+        )}
       </div>
 
       <div className="grid22" style={{ marginBottom: 14 }}>
@@ -1354,7 +1413,7 @@ function KPIsPage({ equipos, gpvList }: { equipos: Equipo[]; gpvList: GPVEntry[]
           <div style={{ padding: "10px 16px" }}>
             {ageBuckets.map(({ label, count, color }) => (
               <div key={label} className="bar-row">
-                <span style={{ fontSize: 12, color: "var(--t2)", width: 90, flexShrink: 0 }}>{label}</span>
+                <span style={{ fontSize: 12, color: "var(--t2)", width: 70, flexShrink: 0 }}>{label}</span>
                 <MiniBar value={count} max={maxAge} color={color} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: count > 0 ? color : "var(--t3)", minWidth: 22, textAlign: "right" }}>{count}</span>
               </div>
@@ -1372,9 +1431,9 @@ function KPIsPage({ equipos, gpvList }: { equipos: Equipo[]; gpvList: GPVEntry[]
           <div className="th"><Ico n="alert" s={14} c="var(--ro)" /><span className="tt">Prioridades</span></div>
           <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
             {[
-              { label: "Alta", count: prioRojo, color: "var(--ro)", bg: "rgba(239,68,68,.1)" },
-              { label: "Media", count: prioAmarillo, color: "var(--am)", bg: "rgba(245,158,11,.1)" },
-              { label: "Sin prioridad", count: prioNinguna, color: "var(--t3)", bg: "var(--bg3)" },
+              { label: "Alta",           count: prioRojo,     color: "var(--ro)", bg: "rgba(239,68,68,.1)" },
+              { label: "Media",          count: prioAmarillo, color: "var(--am)", bg: "rgba(245,158,11,.1)" },
+              { label: "Sin prioridad",  count: prioNinguna,  color: "var(--t3)", bg: "var(--bg3)" },
             ].map(({ label, count, color, bg }) => (
               <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: "var(--r)", background: bg }}>
                 <span style={{ fontSize: 12, color: "var(--t2)" }}>{label}</span>
@@ -1384,69 +1443,47 @@ function KPIsPage({ equipos, gpvList }: { equipos: Equipo[]; gpvList: GPVEntry[]
           </div>
         </div>
 
-        <div className="tw">
-          <div className="th"><Ico n="shield" s={14} c="var(--em)" /><span className="tt">GPV / Garantías</span></div>
-          <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-            {[
-              { label: "Vigentes", count: gpvVigentes - gpvPorVencer, color: "var(--em)", bg: "rgba(16,185,129,.08)" },
-              { label: "Por vencer ≤15d", count: gpvPorVencer, color: "var(--am)", bg: "rgba(245,158,11,.08)" },
-              { label: "Vencidas", count: gpvVencidas, color: "var(--ro)", bg: "rgba(239,68,68,.08)" },
-            ].map(({ label, count, color, bg }) => (
-              <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: "var(--r)", background: bg }}>
-                <span style={{ fontSize: 12, color: "var(--t2)" }}>{label}</span>
-                <span style={{ fontSize: 20, fontWeight: 800, color }}>{count}</span>
-              </div>
-            ))}
-            {gpvTotal === 0 && <div className="empty" style={{ padding: 8 }}>Sin registros GPV</div>}
-          </div>
-        </div>
-
-        <div className="tw">
-          <div className="th"><Ico n="truck" s={14} c="var(--pu)" /><span className="tt">Destino activos</span></div>
-          <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-            {[
-              { label: "Alquiler / Flota", count: alquiler, color: "var(--bl)", pct: Math.round(alquiler / totalA * 100) },
-              { label: "Venta de usado",   count: venta,    color: "var(--pu)", pct: Math.round(venta    / totalA * 100) },
-            ].map(({ label, count, color, pct }) => (
-              <div key={label} style={{ background: "var(--bg3)", borderRadius: "var(--r)", padding: "10px 12px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+        {subTab === "general" ? (
+          <div className="tw">
+            <div className="th"><Ico n="shield" s={14} c="var(--em)" /><span className="tt">GPV / Garantías</span></div>
+            <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+              {[
+                { label: "Vigentes",       count: gpvVigentes - gpvPorVencer, color: "var(--em)", bg: "rgba(16,185,129,.08)" },
+                { label: "Por vencer ≤15d",count: gpvPorVencer,               color: "var(--am)", bg: "rgba(245,158,11,.08)" },
+                { label: "Vencidas",       count: gpvVencidas,                color: "var(--ro)", bg: "rgba(239,68,68,.08)" },
+              ].map(({ label, count, color, bg }) => (
+                <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: "var(--r)", background: bg }}>
                   <span style={{ fontSize: 12, color: "var(--t2)" }}>{label}</span>
-                  <span style={{ fontSize: 16, fontWeight: 800, color }}>{count}</span>
+                  <span style={{ fontSize: 20, fontWeight: 800, color }}>{count}</span>
                 </div>
-                <div style={{ height: 5, background: "var(--bo)", borderRadius: 99, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 99 }} />
+              ))}
+              {gpvTotal === 0 && <div className="empty" style={{ padding: 8 }}>Sin registros GPV</div>}
+            </div>
+          </div>
+        ) : (
+          <div className="tw">
+            <div className="th"><Ico n="wrench" s={14} c="var(--te)" /><span className="tt">Promedio días por estado</span></div>
+            <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: 3 }}>
+              {avgByEstado.length === 0 ? <div className="empty">Sin datos</div> : avgByEstado.map(({ s, avg, count, color }) => (
+                <div key={s} className="bar-row">
+                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: "var(--t2)", width: 130, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s}</span>
+                  <MiniBar value={avg} max={maxAvg} color={color} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: avg > 14 ? "var(--am)" : color, minWidth: 36, textAlign: "right" }}>{avg}d</span>
                 </div>
-                <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 4 }}>{pct}% del total activo</div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      </div>
-
-      <div className="grid22">
-        <div className="tw">
-          <div className="th"><Ico n="wrench" s={14} c="var(--te)" /><span className="tt">Promedio días por estado</span></div>
-          <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: 3 }}>
-            {avgByEstado.length === 0 ? <div className="empty">Sin datos</div> : avgByEstado.map(({ s, avg, count, color }) => (
-              <div key={s} className="bar-row">
-                <div style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: "var(--t2)", width: 155, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s}</span>
-                <MiniBar value={avg} max={maxAvg} color={color} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: avg > 14 ? "var(--am)" : color, minWidth: 36, textAlign: "right" }}>{avg}d</span>
-                <span style={{ fontSize: 10, color: "var(--t3)", minWidth: 24, textAlign: "right" }}>({count})</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        )}
 
         <div className="tw">
-          <div className="th"><Ico n="kpi" s={14} c="var(--am)" /><span className="tt">Cuellos de botella</span><span style={{ marginLeft: "auto", fontSize: 10, color: "var(--t3)" }}>más tiempo en taller</span></div>
+          <div className="th"><Ico n="kpi" s={14} c="var(--am)" /><span className="tt">Cuellos de botella</span><span style={{ marginLeft: "auto", fontSize: 10, color: "var(--bl)" }}>click → observaciones</span></div>
           {bottlenecks.length === 0 ? <div className="empty">Sin equipos activos</div> : bottlenecks.map((m, i) => {
             const dias = dDesde(m.fechaIngreso);
-            const col = dias > 30 ? "var(--ro)" : dias > 14 ? "var(--am)" : "var(--t2)";
+            const col = dias > 60 ? "#dc2626" : dias > 30 ? "var(--ro)" : dias > 14 ? "var(--am)" : "var(--t2)";
             const st = ST[m.estado] || {};
             return (
-              <div key={m.id} className="ri">
+              <div key={m.id} className="ri" style={{ cursor: "pointer" }} onClick={() => onOpenEquipo(m)} title="Ver detalle y observaciones">
                 <span style={{ fontSize: 11, fontWeight: 700, color: "var(--t3)", minWidth: 16 }}>#{i + 1}</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "var(--t)" }}>{m.modelo}
@@ -1464,9 +1501,26 @@ function KPIsPage({ equipos, gpvList }: { equipos: Equipo[]; gpvList: GPVEntry[]
         </div>
       </div>
 
+      {subTab === "general" && (
+        <div className="tw" style={{ marginBottom: 14 }}>
+          <div className="th"><Ico n="wrench" s={14} c="var(--te)" /><span className="tt">Promedio días por estado</span></div>
+          <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: 3 }}>
+            {avgByEstado.length === 0 ? <div className="empty">Sin datos</div> : avgByEstado.map(({ s, avg, count, color }) => (
+              <div key={s} className="bar-row">
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: "var(--t2)", width: 155, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s}</span>
+                <MiniBar value={avg} max={maxAvg} color={color} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: avg > 14 ? "var(--am)" : color, minWidth: 36, textAlign: "right" }}>{avg}d</span>
+                <span style={{ fontSize: 10, color: "var(--t3)", minWidth: 24, textAlign: "right" }}>({count})</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {topModels.length > 0 && (
-        <div className="tw" style={{ marginTop: 14 }}>
-          <div className="th"><Ico n="tag" s={14} c="var(--bl)" /><span className="tt">Modelos con mayor presencia</span><span style={{ marginLeft: "auto", fontSize: 10, color: "var(--t3)" }}>equipos activos en taller</span></div>
+        <div className="tw">
+          <div className="th"><Ico n="tag" s={14} c="var(--bl)" /><span className="tt">Modelos con mayor presencia</span><span style={{ marginLeft: "auto", fontSize: 10, color: "var(--t3)" }}>activos en taller</span></div>
           <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: 3 }}>
             {topModels.map(([model, count]) => {
               const col = aColor(model);
@@ -1486,6 +1540,240 @@ function KPIsPage({ equipos, gpvList }: { equipos: Equipo[]; gpvList: GPVEntry[]
   );
 }
 
+// ── LayoutPage ─────────────────────────────────────────────────
+type LayoutState = Record<string, number>;
+
+const WORKSHOP_W = 880;
+const WORKSHOP_H = 520;
+const BAY_W = 118;
+const BAY_H = 80;
+
+const BAYS = (() => {
+  const list: { id: string; x: number; y: number }[] = [];
+  const colX = [75, 210, 345, 490, 625, 760];
+  const rowY = [68, 158, 310, 400];
+  ["A","B","C","D"].forEach((row, ri) =>
+    colX.forEach((cx, ci) => list.push({ id: `${row}${ci + 1}`, x: cx, y: rowY[ri] }))
+  );
+  return list;
+})();
+
+function LayoutPage({ equipos, layout, onUpdateLayout, onOpenEquipo }: {
+  equipos: Equipo[];
+  layout: LayoutState;
+  onUpdateLayout: (l: LayoutState) => void;
+  onOpenEquipo: (e: Equipo) => void;
+}) {
+  const [slotPicker, setSlotPicker] = useState<string | null>(null);
+  const [pickerSearch, setPickerSearch] = useState("");
+  const activos = equipos.filter(e => ESTADOS_ACTIVOS.has(e.estado));
+
+  const equipoToSlot: Record<number, string> = {};
+  Object.entries(layout).forEach(([sid, eid]) => { equipoToSlot[eid] = sid; });
+
+  const handleBayClick = (slotId: string) => {
+    const eid = layout[slotId];
+    if (eid != null) {
+      const eq = equipos.find(e => e.id === eid);
+      if (eq) onOpenEquipo(eq);
+    } else {
+      setSlotPicker(slotId);
+      setPickerSearch("");
+    }
+  };
+
+  const assignSlot = (slotId: string, equipoId: number) => {
+    const nl: LayoutState = { ...layout };
+    Object.keys(nl).forEach(k => { if (nl[k] === equipoId) delete nl[k]; });
+    nl[slotId] = equipoId;
+    onUpdateLayout(nl);
+    setSlotPicker(null);
+  };
+
+  const removeSlot = (e: React.MouseEvent, slotId: string) => {
+    e.stopPropagation();
+    const nl = { ...layout };
+    delete nl[slotId];
+    onUpdateLayout(nl);
+  };
+
+  const pickerList = activos
+    .filter(e => {
+      if (!pickerSearch) return true;
+      const q = pickerSearch.toLowerCase();
+      return e.modelo.toLowerCase().includes(q) || (e.interno || "").toLowerCase().includes(q) || (e.cliente || "").toLowerCase().includes(q);
+    })
+    .sort((a, b) => {
+      const ap = equipoToSlot[a.id] != null, bp = equipoToSlot[b.id] != null;
+      if (ap !== bp) return ap ? 1 : -1;
+      return a.modelo.localeCompare(b.modelo);
+    });
+
+  const placedCnt = Object.keys(layout).filter(k => activos.some(e => e.id === layout[k])).length;
+
+  return (
+    <div>
+      <div className="sh">
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "var(--t)" }}>Layout del Taller</div>
+          <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 1 }}>
+            {placedCnt} de {activos.length} equipos ubicados · bahía vacía: asignar · bahía ocupada: ver detalle
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 11, color: "var(--t3)", display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 10, height: 10, background: "var(--bl)", borderRadius: 2, display: "inline-block" }} />Flota
+            <span style={{ width: 10, height: 10, background: "var(--pu)", borderRadius: 2, display: "inline-block", marginLeft: 4 }} />Venta
+          </span>
+          {placedCnt > 0 && (
+            <button className="btn" style={{ fontSize: 11, padding: "3px 10px" }}
+              onClick={() => { if (window.confirm("¿Limpiar todas las posiciones?")) onUpdateLayout({}); }}>
+              Limpiar todo
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="layout-wrap">
+        <svg width={WORKSHOP_W} height={WORKSHOP_H} viewBox={`0 0 ${WORKSHOP_W} ${WORKSHOP_H}`} style={{ display: "block", maxWidth: "100%" }}>
+          <rect x={0} y={0} width={WORKSHOP_W} height={WORKSHOP_H} fill="#1a1f2e" rx={8} />
+          <rect x={1} y={1} width={WORKSHOP_W - 2} height={WORKSHOP_H - 2} fill="none" stroke="#2d3448" strokeWidth={2} rx={8} />
+
+          {/* Central aisle */}
+          <rect x={20} y={238} width={WORKSHOP_W - 40} height={32} fill="rgba(0,0,0,.2)" rx={4} />
+          <text x={WORKSHOP_W / 2} y={258} textAnchor="middle" fontSize={10} fill="#4a5270" fontWeight={700} letterSpacing={2}>PASILLO CENTRAL</text>
+
+          {/* Divider between col 3–4 */}
+          {[28, 282].map(y1 => (
+            <line key={y1} x1={418} y1={y1} x2={418} y2={y1 + 200} stroke="#2d3448" strokeWidth={1} strokeDasharray="5,4" />
+          ))}
+
+          {/* Zone labels */}
+          <text x={30} y={20} fontSize={9} fill="#4a5270">↑ ENTRADA / SALIDA</text>
+          <text x={WORKSHOP_W - 30} y={20} fontSize={9} fill="#4a5270" textAnchor="end">HERRAMIENTAS ▸</text>
+          <text x={30} y={WORKSHOP_H - 6} fontSize={9} fill="#4a5270">▾ LAVADO</text>
+          <text x={WORKSHOP_W - 30} y={WORKSHOP_H - 6} fontSize={9} fill="#4a5270" textAnchor="end">DEPÓSITO ▸</text>
+
+          {/* Row labels */}
+          {["A","B","C","D"].map((r, i) => (
+            <text key={r} x={22} y={[68,158,310,400][i] + BAY_H / 2 + 4} fontSize={10} fill="#4a5270" fontWeight={700}>{r}</text>
+          ))}
+
+          {/* Bays */}
+          {BAYS.map(bay => {
+            const eid = layout[bay.id];
+            const eq = eid != null ? equipos.find(e => e.id === eid) : undefined;
+            const isFlota = eq?.destino !== "venta";
+            const fillC = eq ? (isFlota ? "rgba(59,130,246,.1)" : "rgba(168,85,247,.1)") : "rgba(255,255,255,.02)";
+            const strokeC = eq ? (isFlota ? "rgba(59,130,246,.5)" : "rgba(168,85,247,.5)") : "#2d3448";
+            const ringC = eq ? (isFlota ? "#3b82f6" : "#a855f7") : "none";
+
+            return (
+              <g key={bay.id} className="layout-slot" onClick={() => handleBayClick(bay.id)}>
+                <rect x={bay.x - BAY_W/2} y={bay.y} width={BAY_W} height={BAY_H}
+                  fill={fillC} stroke={strokeC} strokeWidth={eq ? 1.5 : 1}
+                  strokeDasharray={eq ? "none" : "4,3"} rx={6} />
+
+                <text x={bay.x} y={bay.y + 13} textAnchor="middle" fontSize={9} fill="#4a5270" fontWeight={600}>{bay.id}</text>
+
+                {eq ? (
+                  <>
+                    <circle cx={bay.x} cy={bay.y + BAY_H/2 + 6} r={23}
+                      fill={isFlota ? "rgba(59,130,246,.15)" : "rgba(168,85,247,.15)"}
+                      stroke={ringC} strokeWidth={1.5} />
+                    <text x={bay.x} y={bay.y + BAY_H/2 + 3} textAnchor="middle" fontSize={9} fontWeight={700} fill="#e2e8f0">
+                      {eq.modelo.slice(0,10)}
+                    </text>
+                    <text x={bay.x} y={bay.y + BAY_H/2 + 15} textAnchor="middle" fontSize={8} fill="#94a3b8">
+                      {eq.interno ? `#${eq.interno}` : ""}
+                    </text>
+                    <g onClick={(e) => removeSlot(e, bay.id)} style={{ cursor: "pointer" }}>
+                      <circle cx={bay.x + BAY_W/2 - 9} cy={bay.y + 9} r={7} fill="#1e2535" stroke="#2d3448" strokeWidth={1} />
+                      <text x={bay.x + BAY_W/2 - 9} y={bay.y + 13} textAnchor="middle" fontSize={11} fill="#64748b">×</text>
+                    </g>
+                  </>
+                ) : (
+                  <text x={bay.x} y={bay.y + BAY_H/2 + 10} textAnchor="middle" fontSize={20} fill="#2d3448">+</text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+
+      {activos.filter(e => !equipoToSlot[e.id]).length > 0 && (
+        <div className="tw" style={{ marginTop: 14 }}>
+          <div className="th">
+            <Ico n="wrench" s={14} c="var(--t3)" />
+            <span className="tt">Sin ubicar en plano</span>
+            <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--bl)" }}>click → ver equipo</span>
+          </div>
+          {activos.filter(e => !equipoToSlot[e.id]).map(eq => {
+            const st = ST[eq.estado] || {};
+            const dias = dDesde(eq.fechaIngreso);
+            return (
+              <div key={eq.id} className="ri" style={{ cursor: "pointer" }} onClick={() => onOpenEquipo(eq)}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: eq.destino === "venta" ? "var(--pu)" : "var(--bl)", flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--t)" }}>{eq.modelo}</span>
+                  {eq.interno && <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "monospace", marginLeft: 6 }}>{eq.interno}</span>}
+                  <div style={{ fontSize: 10, color: "var(--t3)" }}>{eq.cliente || "Stock"}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: st.bg, color: st.color, border: `1px solid ${st.border}` }}>{eq.estado}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: dias > 30 ? "var(--ro)" : "var(--t3)" }}>{dias}d</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {slotPicker && (
+        <div className="slot-picker" onClick={() => setSlotPicker(null)}>
+          <div className="slot-picker-box" onClick={e => e.stopPropagation()}>
+            <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--bo)", display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--t)" }}>Asignar equipo → Bahía {slotPicker}</div>
+                <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 2 }}>Seleccioná el equipo a ubicar</div>
+              </div>
+              <button className="btn" onClick={() => setSlotPicker(null)} style={{ padding: "3px 10px", fontSize: 12 }}>✕</button>
+            </div>
+            <div style={{ padding: "10px 16px" }}>
+              <input autoFocus className="inp" placeholder="Buscar modelo, interno, cliente…"
+                value={pickerSearch} onChange={e => setPickerSearch(e.target.value)}
+                style={{ width: "100%" }} />
+            </div>
+            <div className="slot-picker-list">
+              {pickerList.length === 0 && <div className="empty">Sin equipos activos</div>}
+              {pickerList.map(eq => {
+                const placed = equipoToSlot[eq.id];
+                const st = ST[eq.estado] || {};
+                return (
+                  <div key={eq.id} className="ri" style={{ cursor: "pointer", opacity: placed ? .55 : 1 }}
+                    onClick={() => assignSlot(slotPicker!, eq.id)}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: eq.destino === "venta" ? "var(--pu)" : "var(--bl)", flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--t)" }}>{eq.modelo}
+                        {eq.interno && <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "monospace", marginLeft: 5 }}>{eq.interno}</span>}
+                      </div>
+                      <div style={{ fontSize: 10, color: "var(--t3)" }}>{eq.cliente || "Stock"}</div>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+                      <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: st.bg, color: st.color, border: `1px solid ${st.border}` }}>{eq.estado}</span>
+                      {placed && <span style={{ fontSize: 9, color: "var(--am)" }}>Ya en {placed}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Root App ──────────────────────────────────────────────────
 export default function App() {
   const [auth, setAuth] = useState(() => {
@@ -1494,6 +1782,7 @@ export default function App() {
   const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [gpvList, setGpvList] = useState<GPVEntry[]>([]);
   const [tecnicos, setTecnicos] = useState<string[]>(DEFAULT_TECNICOS);
+  const [layout, setLayout] = useState<LayoutState>({});
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [collapsed, setCol] = useState(false);
@@ -1519,6 +1808,7 @@ export default function App() {
     setEquipos((s.equipos as Equipo[]).map(normalizeEquipo));
     setGpvList(s.gpvList as GPVEntry[]);
     setTecnicos((s.tecnicos as string[]).length > 0 ? s.tecnicos as string[] : DEFAULT_TECNICOS);
+    setLayout((s.layout as LayoutState) ?? {});
     lastAppliedAtRef.current = s.updatedAt ?? null;
   }, []);
 
@@ -1544,11 +1834,15 @@ export default function App() {
 
   const loading = auth && (apiLoading || !loaded);
 
-  const save = useCallback((eq: Equipo[], gv: GPVEntry[], tecs?: string[]) => {
+  const save = useCallback((eq: Equipo[], gv: GPVEntry[], tecs?: string[], lay?: LayoutState) => {
     const techList = tecs ?? tecnicos;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      saveToApi({ data: { equipos: eq as never[], gpvList: gv as never[], tecnicos: techList } });
+      setLayout(cur => {
+        const layoutToSave = lay ?? cur;
+        saveToApi({ data: { equipos: eq as never[], gpvList: gv as never[], tecnicos: techList, layout: layoutToSave as never } });
+        return cur;
+      });
     }, 600);
   }, [tecnicos, saveToApi]);
 
@@ -1640,6 +1934,7 @@ export default function App() {
     { id: "taller",    label: "Taller",     icon: "wrench",   count: enTallerCnt },
     { id: "venta",     label: "Venta/GPV",  icon: "tag",      alert: gpvAlertaCnt, count: gpvList.length + disp.length },
     { id: "kpis",      label: "KPIs",       icon: "kpi" },
+    { id: "layout",    label: "Layout",     icon: "bar" },
     { id: "tecnicos",  label: "Técnicos",   icon: "users",    count: tecnicos.length },
   ];
   const titles: Record<string, [string, string]> = {
@@ -1647,6 +1942,7 @@ export default function App() {
     taller:    ["Taller", "Equipos en reparación"],
     venta:     ["Venta / GPV", "Disponibles · Garantía por venta"],
     kpis:      ["KPIs — Equipos", "Indicadores de rendimiento operativo"],
+    layout:    ["Layout del Taller", "Mapa visual de posiciones"],
     tecnicos:  ["Técnicos", "Gestión del equipo"],
   };
 
@@ -1738,7 +2034,15 @@ export default function App() {
 
             <main className="content">
               {tab === "dashboard" && <Dashboard equipos={equipos} gpvList={gpvList} tecnicos={tecnicos} />}
-              {tab === "kpis" && <KPIsPage equipos={equipos} gpvList={gpvList} />}
+              {tab === "kpis" && <KPIsPage equipos={equipos} gpvList={gpvList} tecnicos={tecnicos} onOpenEquipo={m => setModal({ type: "taller", item: m })} />}
+              {tab === "layout" && (
+                <LayoutPage
+                  equipos={equipos}
+                  layout={layout}
+                  onUpdateLayout={nl => { setLayout(nl); setEquipos(eq => { setGpvList(gv => { save(eq, gv, undefined, nl); return gv; }); return eq; }); }}
+                  onOpenEquipo={m => setModal({ type: "taller", item: m })}
+                />
+              )}
               {tab === "taller" && (
                 <TallerPage
                   equipos={equipos}

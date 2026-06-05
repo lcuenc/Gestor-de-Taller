@@ -47,6 +47,7 @@ export const GetTallerStateResponse = zod.object({
   "estado": zod.string()
 })),
   "tecnicos": zod.array(zod.string()),
+  "layout": zod.record(zod.string(), zod.number()),
   "updatedAt": zod.string().nullish()
 })
 
@@ -80,7 +81,8 @@ export const SaveTallerStateBody = zod.object({
   "observacion": zod.string(),
   "estado": zod.string()
 })),
-  "tecnicos": zod.array(zod.string())
+  "tecnicos": zod.array(zod.string()),
+  "layout": zod.record(zod.string(), zod.number())
 })
 
 export const SaveTallerStateResponse = zod.object({
@@ -109,6 +111,7 @@ export const SaveTallerStateResponse = zod.object({
   "estado": zod.string()
 })),
   "tecnicos": zod.array(zod.string()),
+  "layout": zod.record(zod.string(), zod.number()),
   "updatedAt": zod.string().nullish()
 })
 

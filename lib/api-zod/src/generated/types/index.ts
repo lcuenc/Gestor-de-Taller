@@ -11,3 +11,5 @@ export * from './gPVEntry';
 export * from './healthStatus';
 export * from './tallerState';
 export * from './tallerStateInput';
+export * from './tallerStateInputLayout';
+export * from './tallerStateLayout';
