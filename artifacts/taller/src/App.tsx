@@ -1732,17 +1732,17 @@ td{padding:7px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top}
 }
 
 // ── LayoutPage ─────────────────────────────────────────────────
-// LayoutState: bayId ("1"–"10") → array of equipo IDs
+// LayoutState: bayId ("1"–"9") → array of equipo IDs
 type LayoutState = Record<string, number[]>;
 
 // Zone labels per bay
 const BAY_ZONE: Record<string, string> = {
   "1": "Light", "2": "Light",
-  "10": "Martillos",
+  "9": "Martillos",
 };
 const getBayZone = (id: string) => BAY_ZONE[id] ?? "Heavy";
 
-const BAYS_CONFIG = Array.from({ length: 10 }, (_, i) => ({
+const BAYS_CONFIG = Array.from({ length: 9 }, (_, i) => ({
   id: String(i + 1),
   label: `Bahía ${i + 1}`,
   highCap: i < 2,
@@ -1825,10 +1825,10 @@ function LayoutPage({ equipos, layout, onUpdateLayout, onOpenEquipo, canEdit }: 
         )}
       </div>
 
-      {/* Bay grid — 10 bays, scrollable horizontally */}
+      {/* Bay grid — 9 bays, scrollable horizontally */}
       <div style={{ marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-          <span style={{ fontSize: 11, color: "var(--t3)" }}>← Izquierda (Bahía 10)</span>
+          <span style={{ fontSize: 11, color: "var(--t3)" }}>← Izquierda (Bahía 9)</span>
           <div style={{ flex: 1, height: 1, background: "var(--bo)" }} />
           <span style={{ fontSize: 11, color: "var(--t3)" }}>(Bahía 1) Derecha →</span>
         </div>
