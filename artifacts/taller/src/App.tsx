@@ -245,9 +245,20 @@ html,body,#root{margin:0;padding:0;width:100%;height:100%;overflow:hidden;backgr
 .app .sub-tab{background:none;border:none;color:var(--t3);font-size:12px;font-weight:600;padding:5px 16px;border-radius:var(--r);cursor:pointer;transition:all .15s}
 .app .sub-tab.active{background:var(--bg2);color:var(--t);box-shadow:0 1px 3px rgba(0,0,0,.25)}
 .app .sub-tab:hover:not(.active){color:var(--t2)}
-.app .layout-wrap{overflow-x:auto;background:var(--bg3);border:1px solid var(--bo);border-radius:var(--r2);padding:12px}
-.app .layout-slot{cursor:pointer}
-.app .layout-slot:hover rect{filter:brightness(1.15)}
+.app .bay-grid{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px}
+.app .bay-card{flex:0 0 auto;width:148px;min-height:180px;background:var(--bg3);border:1px solid var(--bo);border-radius:var(--r2);display:flex;flex-direction:column;overflow:hidden;transition:border-color .15s}
+.app .bay-card.high-cap{width:168px;border-color:rgba(59,130,246,.25)}
+.app .bay-card:hover{border-color:var(--bl)}
+.app .bay-hd{padding:8px 10px 6px;border-bottom:1px solid var(--bo);display:flex;align-items:center;gap:6px}
+.app .bay-num{font-size:16px;font-weight:800;color:var(--t);line-height:1}
+.app .bay-cap{font-size:9px;color:var(--t3);margin-left:auto}
+.app .bay-body{flex:1;display:flex;flex-direction:column;gap:6px;padding:8px}
+.app .bay-chip{display:flex;align-items:center;gap:5px;background:var(--bg2);border-radius:var(--r);padding:5px 7px;cursor:pointer;transition:background .12s}
+.app .bay-chip:hover{background:rgba(59,130,246,.1)}
+.app .bay-chip-venta{background:rgba(168,85,247,.07)}
+.app .bay-chip-venta:hover{background:rgba(168,85,247,.15)}
+.app .bay-add{display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 6px;border-radius:var(--r);border:1px dashed var(--bo);color:var(--t3);font-size:11px;cursor:pointer;transition:all .15s;margin-top:auto;background:none;width:100%}
+.app .bay-add:hover{border-color:var(--bl);color:var(--bl);background:rgba(59,130,246,.06)}
 .app .slot-picker{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:200}
 .app .slot-picker-box{background:var(--bg2);border:1px solid var(--bo);border-radius:var(--r2);width:430px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
 .app .slot-picker-list{overflow-y:auto;flex:1}
@@ -1541,22 +1552,15 @@ function KPIsPage({ equipos, gpvList, tecnicos: _tecList, onOpenEquipo }: {
 }
 
 // ── LayoutPage ─────────────────────────────────────────────────
-type LayoutState = Record<string, number>;
+// LayoutState: bayId ("1"–"10") → array of equipo IDs
+type LayoutState = Record<string, number[]>;
 
-const WORKSHOP_W = 880;
-const WORKSHOP_H = 520;
-const BAY_W = 118;
-const BAY_H = 80;
-
-const BAYS = (() => {
-  const list: { id: string; x: number; y: number }[] = [];
-  const colX = [75, 210, 345, 490, 625, 760];
-  const rowY = [68, 158, 310, 400];
-  ["A","B","C","D"].forEach((row, ri) =>
-    colX.forEach((cx, ci) => list.push({ id: `${row}${ci + 1}`, x: cx, y: rowY[ri] }))
-  );
-  return list;
-})();
+// Bays 1-2 support multiple equipos; 3-10 normally hold 1
+const BAYS_CONFIG = Array.from({ length: 10 }, (_, i) => ({
+  id: String(i + 1),
+  label: `Bahía ${i + 1}`,
+  highCap: i < 2, // bays 1 and 2
+}));
 
 function LayoutPage({ equipos, layout, onUpdateLayout, onOpenEquipo }: {
   equipos: Equipo[];
@@ -1564,52 +1568,55 @@ function LayoutPage({ equipos, layout, onUpdateLayout, onOpenEquipo }: {
   onUpdateLayout: (l: LayoutState) => void;
   onOpenEquipo: (e: Equipo) => void;
 }) {
-  const [slotPicker, setSlotPicker] = useState<string | null>(null);
+  const [picker, setPicker] = useState<string | null>(null); // bayId being assigned
   const [pickerSearch, setPickerSearch] = useState("");
   const activos = equipos.filter(e => ESTADOS_ACTIVOS.has(e.estado));
 
-  const equipoToSlot: Record<number, string> = {};
-  Object.entries(layout).forEach(([sid, eid]) => { equipoToSlot[eid] = sid; });
+  // equipo → bay index for "already placed" detection
+  const equipoBay: Record<number, string> = {};
+  Object.entries(layout).forEach(([bid, ids]) => {
+    (ids || []).forEach(id => { equipoBay[id] = bid; });
+  });
 
-  const handleBayClick = (slotId: string) => {
-    const eid = layout[slotId];
-    if (eid != null) {
-      const eq = equipos.find(e => e.id === eid);
-      if (eq) onOpenEquipo(eq);
-    } else {
-      setSlotPicker(slotId);
-      setPickerSearch("");
-    }
-  };
+  const getBayEqs = (bayId: string): Equipo[] =>
+    (layout[bayId] || []).map(id => equipos.find(e => e.id === id)).filter(Boolean) as Equipo[];
 
-  const assignSlot = (slotId: string, equipoId: number) => {
-    const nl: LayoutState = { ...layout };
-    Object.keys(nl).forEach(k => { if (nl[k] === equipoId) delete nl[k]; });
-    nl[slotId] = equipoId;
+  const addToBay = (bayId: string, equipoId: number) => {
+    const nl: LayoutState = {};
+    // Copy all bays, removing this equipoId from wherever it was
+    Object.entries(layout).forEach(([bid, ids]) => {
+      nl[bid] = (ids || []).filter(id => id !== equipoId);
+    });
+    nl[bayId] = [...(nl[bayId] || []), equipoId];
+    // Clean empty bays
+    Object.keys(nl).forEach(k => { if (!nl[k].length) delete nl[k]; });
     onUpdateLayout(nl);
-    setSlotPicker(null);
+    setPicker(null);
   };
 
-  const removeSlot = (e: React.MouseEvent, slotId: string) => {
+  const removeFromBay = (e: React.MouseEvent, bayId: string, equipoId: number) => {
     e.stopPropagation();
     const nl = { ...layout };
-    delete nl[slotId];
+    nl[bayId] = (nl[bayId] || []).filter(id => id !== equipoId);
+    if (!nl[bayId].length) delete nl[bayId];
     onUpdateLayout(nl);
   };
 
-  const pickerList = activos
-    .filter(e => {
-      if (!pickerSearch) return true;
-      const q = pickerSearch.toLowerCase();
-      return e.modelo.toLowerCase().includes(q) || (e.interno || "").toLowerCase().includes(q) || (e.cliente || "").toLowerCase().includes(q);
-    })
-    .sort((a, b) => {
-      const ap = equipoToSlot[a.id] != null, bp = equipoToSlot[b.id] != null;
-      if (ap !== bp) return ap ? 1 : -1;
-      return a.modelo.localeCompare(b.modelo);
-    });
+  const placedIds = new Set(Object.values(layout).flat());
+  const placedCnt = [...placedIds].filter(id => activos.some(e => e.id === id)).length;
+  const unplaced = activos.filter(e => !placedIds.has(e.id));
 
-  const placedCnt = Object.keys(layout).filter(k => activos.some(e => e.id === layout[k])).length;
+  const pickerList = activos.filter(e => {
+    if (!pickerSearch) return true;
+    const q = pickerSearch.toLowerCase();
+    return e.modelo.toLowerCase().includes(q) ||
+      (e.interno || "").toLowerCase().includes(q) ||
+      (e.cliente || "").toLowerCase().includes(q);
+  }).sort((a, b) => {
+    const ap = equipoBay[a.id] != null, bp = equipoBay[b.id] != null;
+    if (ap !== bp) return ap ? 1 : -1;
+    return a.modelo.localeCompare(b.modelo);
+  });
 
   return (
     <div>
@@ -1617,110 +1624,110 @@ function LayoutPage({ equipos, layout, onUpdateLayout, onOpenEquipo }: {
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: "var(--t)" }}>Layout del Taller</div>
           <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 1 }}>
-            {placedCnt} de {activos.length} equipos ubicados · bahía vacía: asignar · bahía ocupada: ver detalle
+            {placedCnt} de {activos.length} equipos ubicados
+            <span style={{ margin: "0 6px", color: "var(--bo)" }}>·</span>
+            <span style={{ color: "var(--bl)" }}>Flota</span>
+            <span style={{ color: "var(--pu)", marginLeft: 8 }}>Venta</span>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 11, color: "var(--t3)", display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 10, height: 10, background: "var(--bl)", borderRadius: 2, display: "inline-block" }} />Flota
-            <span style={{ width: 10, height: 10, background: "var(--pu)", borderRadius: 2, display: "inline-block", marginLeft: 4 }} />Venta
-          </span>
-          {placedCnt > 0 && (
-            <button className="btn" style={{ fontSize: 11, padding: "3px 10px" }}
-              onClick={() => { if (window.confirm("¿Limpiar todas las posiciones?")) onUpdateLayout({}); }}>
-              Limpiar todo
-            </button>
-          )}
-        </div>
+        {placedCnt > 0 && (
+          <button className="btn" style={{ fontSize: 11, padding: "4px 12px" }}
+            onClick={() => { if (window.confirm("¿Limpiar todas las posiciones?")) onUpdateLayout({}); }}>
+            Limpiar todo
+          </button>
+        )}
       </div>
 
-      <div className="layout-wrap">
-        <svg width={WORKSHOP_W} height={WORKSHOP_H} viewBox={`0 0 ${WORKSHOP_W} ${WORKSHOP_H}`} style={{ display: "block", maxWidth: "100%" }}>
-          <rect x={0} y={0} width={WORKSHOP_W} height={WORKSHOP_H} fill="#1a1f2e" rx={8} />
-          <rect x={1} y={1} width={WORKSHOP_W - 2} height={WORKSHOP_H - 2} fill="none" stroke="#2d3448" strokeWidth={2} rx={8} />
-
-          {/* Central aisle */}
-          <rect x={20} y={238} width={WORKSHOP_W - 40} height={32} fill="rgba(0,0,0,.2)" rx={4} />
-          <text x={WORKSHOP_W / 2} y={258} textAnchor="middle" fontSize={10} fill="#4a5270" fontWeight={700} letterSpacing={2}>PASILLO CENTRAL</text>
-
-          {/* Divider between col 3–4 */}
-          {[28, 282].map(y1 => (
-            <line key={y1} x1={418} y1={y1} x2={418} y2={y1 + 200} stroke="#2d3448" strokeWidth={1} strokeDasharray="5,4" />
-          ))}
-
-          {/* Zone labels */}
-          <text x={30} y={20} fontSize={9} fill="#4a5270">↑ ENTRADA / SALIDA</text>
-          <text x={WORKSHOP_W - 30} y={20} fontSize={9} fill="#4a5270" textAnchor="end">HERRAMIENTAS ▸</text>
-          <text x={30} y={WORKSHOP_H - 6} fontSize={9} fill="#4a5270">▾ LAVADO</text>
-          <text x={WORKSHOP_W - 30} y={WORKSHOP_H - 6} fontSize={9} fill="#4a5270" textAnchor="end">DEPÓSITO ▸</text>
-
-          {/* Row labels */}
-          {["A","B","C","D"].map((r, i) => (
-            <text key={r} x={22} y={[68,158,310,400][i] + BAY_H / 2 + 4} fontSize={10} fill="#4a5270" fontWeight={700}>{r}</text>
-          ))}
-
-          {/* Bays */}
-          {BAYS.map(bay => {
-            const eid = layout[bay.id];
-            const eq = eid != null ? equipos.find(e => e.id === eid) : undefined;
-            const isFlota = eq?.destino !== "venta";
-            const fillC = eq ? (isFlota ? "rgba(59,130,246,.1)" : "rgba(168,85,247,.1)") : "rgba(255,255,255,.02)";
-            const strokeC = eq ? (isFlota ? "rgba(59,130,246,.5)" : "rgba(168,85,247,.5)") : "#2d3448";
-            const ringC = eq ? (isFlota ? "#3b82f6" : "#a855f7") : "none";
-
+      {/* Bay grid — 10 bays, scrollable horizontally */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <span style={{ fontSize: 11, color: "var(--t3)" }}>← Izquierda (Bahía 10)</span>
+          <div style={{ flex: 1, height: 1, background: "var(--bo)" }} />
+          <span style={{ fontSize: 11, color: "var(--t3)" }}>(Bahía 1) Derecha →</span>
+        </div>
+        <div className="bay-grid">
+          {[...BAYS_CONFIG].reverse().map(bay => {
+            const eqs = getBayEqs(bay.id);
             return (
-              <g key={bay.id} className="layout-slot" onClick={() => handleBayClick(bay.id)}>
-                <rect x={bay.x - BAY_W/2} y={bay.y} width={BAY_W} height={BAY_H}
-                  fill={fillC} stroke={strokeC} strokeWidth={eq ? 1.5 : 1}
-                  strokeDasharray={eq ? "none" : "4,3"} rx={6} />
-
-                <text x={bay.x} y={bay.y + 13} textAnchor="middle" fontSize={9} fill="#4a5270" fontWeight={600}>{bay.id}</text>
-
-                {eq ? (
-                  <>
-                    <circle cx={bay.x} cy={bay.y + BAY_H/2 + 6} r={23}
-                      fill={isFlota ? "rgba(59,130,246,.15)" : "rgba(168,85,247,.15)"}
-                      stroke={ringC} strokeWidth={1.5} />
-                    <text x={bay.x} y={bay.y + BAY_H/2 + 3} textAnchor="middle" fontSize={9} fontWeight={700} fill="#e2e8f0">
-                      {eq.modelo.slice(0,10)}
-                    </text>
-                    <text x={bay.x} y={bay.y + BAY_H/2 + 15} textAnchor="middle" fontSize={8} fill="#94a3b8">
-                      {eq.interno ? `#${eq.interno}` : ""}
-                    </text>
-                    <g onClick={(e) => removeSlot(e, bay.id)} style={{ cursor: "pointer" }}>
-                      <circle cx={bay.x + BAY_W/2 - 9} cy={bay.y + 9} r={7} fill="#1e2535" stroke="#2d3448" strokeWidth={1} />
-                      <text x={bay.x + BAY_W/2 - 9} y={bay.y + 13} textAnchor="middle" fontSize={11} fill="#64748b">×</text>
-                    </g>
-                  </>
-                ) : (
-                  <text x={bay.x} y={bay.y + BAY_H/2 + 10} textAnchor="middle" fontSize={20} fill="#2d3448">+</text>
-                )}
-              </g>
+              <div key={bay.id} className={`bay-card${bay.highCap ? " high-cap" : ""}`}>
+                <div className="bay-hd">
+                  <span className="bay-num">{bay.id}</span>
+                  {bay.highCap && (
+                    <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: "rgba(59,130,246,.12)", color: "var(--bl)", marginLeft: 4 }}>
+                      2-3 eq
+                    </span>
+                  )}
+                  <span className="bay-cap">{eqs.length} equipo{eqs.length !== 1 ? "s" : ""}</span>
+                </div>
+                <div className="bay-body">
+                  {eqs.map(eq => {
+                    const isVenta = eq.destino === "venta";
+                    const st = ST[eq.estado] || {};
+                    const dias = dDesde(eq.fechaIngreso);
+                    const urgente = dias > 30;
+                    return (
+                      <div key={eq.id} className={`bay-chip${isVenta ? " bay-chip-venta" : ""}`}
+                        onClick={() => onOpenEquipo(eq)} title={`${eq.modelo} · ${dias}d en taller`}>
+                        <div style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                          background: isVenta ? "var(--pu)" : "var(--bl)" }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--t)",
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {eq.modelo}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 1 }}>
+                            <span style={{ fontSize: 9, padding: "0 4px", borderRadius: 99,
+                              background: st.bg, color: st.color, border: `1px solid ${st.border}` }}>
+                              {eq.estado.slice(0, 8)}
+                            </span>
+                            <span style={{ fontSize: 9, fontWeight: 700,
+                              color: urgente ? "var(--ro)" : "var(--t3)" }}>{dias}d</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={e => removeFromBay(e, bay.id, eq.id)}
+                          style={{ background: "none", border: "none", cursor: "pointer",
+                            color: "var(--t3)", fontSize: 14, lineHeight: 1, padding: "0 2px",
+                            flexShrink: 0, display: "flex", alignItems: "center" }}
+                          title="Quitar de la bahía">×</button>
+                      </div>
+                    );
+                  })}
+                  <button className="bay-add" onClick={() => { setPicker(bay.id); setPickerSearch(""); }}>
+                    <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
+                    <span>Agregar</span>
+                  </button>
+                </div>
+              </div>
             );
           })}
-        </svg>
+        </div>
       </div>
 
-      {activos.filter(e => !equipoToSlot[e.id]).length > 0 && (
-        <div className="tw" style={{ marginTop: 14 }}>
+      {/* Unplaced equipos */}
+      {unplaced.length > 0 && (
+        <div className="tw">
           <div className="th">
             <Ico n="wrench" s={14} c="var(--t3)" />
-            <span className="tt">Sin ubicar en plano</span>
+            <span className="tt">Sin ubicar</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--t3)", marginLeft: 6 }}>{unplaced.length}</span>
             <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--bl)" }}>click → ver equipo</span>
           </div>
-          {activos.filter(e => !equipoToSlot[e.id]).map(eq => {
+          {unplaced.map(eq => {
             const st = ST[eq.estado] || {};
             const dias = dDesde(eq.fechaIngreso);
             return (
               <div key={eq.id} className="ri" style={{ cursor: "pointer" }} onClick={() => onOpenEquipo(eq)}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: eq.destino === "venta" ? "var(--pu)" : "var(--bl)", flexShrink: 0 }} />
+                <div style={{ width: 8, height: 8, borderRadius: "50%",
+                  background: eq.destino === "venta" ? "var(--pu)" : "var(--bl)", flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: "var(--t)" }}>{eq.modelo}</span>
                   {eq.interno && <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "monospace", marginLeft: 6 }}>{eq.interno}</span>}
                   <div style={{ fontSize: 10, color: "var(--t3)" }}>{eq.cliente || "Stock"}</div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: st.bg, color: st.color, border: `1px solid ${st.border}` }}>{eq.estado}</span>
+                  <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99,
+                    background: st.bg, color: st.color, border: `1px solid ${st.border}` }}>{eq.estado}</span>
                   <span style={{ fontSize: 11, fontWeight: 700, color: dias > 30 ? "var(--ro)" : "var(--t3)" }}>{dias}d</span>
                 </div>
               </div>
@@ -1729,15 +1736,20 @@ function LayoutPage({ equipos, layout, onUpdateLayout, onOpenEquipo }: {
         </div>
       )}
 
-      {slotPicker && (
-        <div className="slot-picker" onClick={() => setSlotPicker(null)}>
+      {/* Picker modal */}
+      {picker && (
+        <div className="slot-picker" onClick={() => setPicker(null)}>
           <div className="slot-picker-box" onClick={e => e.stopPropagation()}>
             <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--bo)", display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--t)" }}>Asignar equipo → Bahía {slotPicker}</div>
-                <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 2 }}>Seleccioná el equipo a ubicar</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--t)" }}>Agregar a Bahía {picker}</div>
+                <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 2 }}>
+                  {BAYS_CONFIG.find(b => b.id === picker)?.highCap
+                    ? "Alta capacidad — podés agregar 2 o 3 equipos"
+                    : "Seleccioná el equipo a ubicar"}
+                </div>
               </div>
-              <button className="btn" onClick={() => setSlotPicker(null)} style={{ padding: "3px 10px", fontSize: 12 }}>✕</button>
+              <button className="btn" onClick={() => setPicker(null)} style={{ padding: "3px 10px", fontSize: 12 }}>✕</button>
             </div>
             <div style={{ padding: "10px 16px" }}>
               <input autoFocus className="inp" placeholder="Buscar modelo, interno, cliente…"
@@ -1747,12 +1759,13 @@ function LayoutPage({ equipos, layout, onUpdateLayout, onOpenEquipo }: {
             <div className="slot-picker-list">
               {pickerList.length === 0 && <div className="empty">Sin equipos activos</div>}
               {pickerList.map(eq => {
-                const placed = equipoToSlot[eq.id];
+                const alreadyInBay = equipoBay[eq.id];
                 const st = ST[eq.estado] || {};
                 return (
-                  <div key={eq.id} className="ri" style={{ cursor: "pointer", opacity: placed ? .55 : 1 }}
-                    onClick={() => assignSlot(slotPicker!, eq.id)}>
-                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: eq.destino === "venta" ? "var(--pu)" : "var(--bl)", flexShrink: 0 }} />
+                  <div key={eq.id} className="ri" style={{ cursor: "pointer", opacity: alreadyInBay === picker ? .4 : 1 }}
+                    onClick={() => alreadyInBay !== picker && addToBay(picker!, eq.id)}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%",
+                      background: eq.destino === "venta" ? "var(--pu)" : "var(--bl)", flexShrink: 0 }} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: "var(--t)" }}>{eq.modelo}
                         {eq.interno && <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "monospace", marginLeft: 5 }}>{eq.interno}</span>}
@@ -1760,8 +1773,13 @@ function LayoutPage({ equipos, layout, onUpdateLayout, onOpenEquipo }: {
                       <div style={{ fontSize: 10, color: "var(--t3)" }}>{eq.cliente || "Stock"}</div>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
-                      <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: st.bg, color: st.color, border: `1px solid ${st.border}` }}>{eq.estado}</span>
-                      {placed && <span style={{ fontSize: 9, color: "var(--am)" }}>Ya en {placed}</span>}
+                      <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99,
+                        background: st.bg, color: st.color, border: `1px solid ${st.border}` }}>{eq.estado}</span>
+                      {alreadyInBay && (
+                        <span style={{ fontSize: 9, color: alreadyInBay === picker ? "var(--t3)" : "var(--am)" }}>
+                          {alreadyInBay === picker ? "Ya en esta bahía" : `Mover desde ${alreadyInBay}`}
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
@@ -1808,7 +1826,7 @@ export default function App() {
     setEquipos((s.equipos as Equipo[]).map(normalizeEquipo));
     setGpvList(s.gpvList as GPVEntry[]);
     setTecnicos((s.tecnicos as string[]).length > 0 ? s.tecnicos as string[] : DEFAULT_TECNICOS);
-    setLayout((s.layout as LayoutState) ?? {});
+    setLayout((s.layout as unknown as LayoutState) ?? {});
     lastAppliedAtRef.current = s.updatedAt ?? null;
   }, []);
 
