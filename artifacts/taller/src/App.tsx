@@ -1029,9 +1029,8 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
   return (
     <div>
       <div className="sh">
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "var(--t)" }}>Taller de reparaciones</div>
-          <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 1 }}>{sorted.length} equipo{sorted.length !== 1 ? "s" : ""}</div>
+        <div style={{ fontSize: 13, color: "var(--t2)", fontWeight: 600 }}>
+          {sorted.length} equipo{sorted.length !== 1 ? "s" : ""} <span style={{ color: "var(--t3)", fontWeight: 400 }}>en esta vista</span>
         </div>
         <button className="btn btnp" onClick={onAdd}><Ico n="plus" s={14} c="#fff" />Registrar ingreso</button>
       </div>
@@ -1174,11 +1173,7 @@ function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, on
 
   return (
     <div>
-      <div className="sh">
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "var(--t)" }}>Venta / GPV</div>
-          <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 1 }}>Disponibles · Garantía por venta</div>
-        </div>
+      <div className="sh" style={{ justifyContent: "flex-end" }}>
         <button className="btn btnp" onClick={onAddGPV}><Ico n="plus" s={14} c="#fff" />Registrar venta</button>
       </div>
 
@@ -1434,13 +1429,6 @@ td{padding:7px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top}
 
   return (
     <div>
-      <div className="sh">
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "var(--t)" }}>KPIs — Equipos</div>
-          <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 1 }}>Indicadores de rendimiento · {total} equipo{total !== 1 ? "s" : ""} registrados</div>
-        </div>
-      </div>
-
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div className="sub-tab-bar" style={{ marginBottom: 0 }}>
           {(["general", "flota", "venta"] as KpiSubTab[]).map(t => (
@@ -1465,42 +1453,42 @@ td{padding:7px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top}
           <>
             <Card val={gpvPorVencer} lbl="GPV próximas a vencer" color={gpvPorVencer > 0 ? "var(--am)" : "var(--em)"} sub={`de ${gpvTotal} en cartera`} />
             <Card val={gpvVencidas} lbl="GPV vencidas" color={gpvVencidas > 0 ? "var(--ro)" : "var(--t3)"} />
-            <div className="kpi-card" style={{ borderTopColor: "#10b981", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            <div className="kpi-card" style={{ borderTopColor: "#10b981", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, textAlign: "center" }}>
               {(() => {
                 const circ = 2 * Math.PI * 36;
                 const flotaArc = flotaPct / 100 * circ;
                 const ventaArc = circ - flotaArc;
                 return (
                   <>
-                    <svg viewBox="0 0 100 100" width={96} height={96} style={{ display: "block" }}>
-                      <circle cx="50" cy="50" r="36" fill="none" stroke="#1e2535" strokeWidth="14" />
+                    <svg viewBox="0 0 100 100" width={86} height={86} style={{ display: "block", flexShrink: 0 }}>
+                      <circle cx="50" cy="50" r="36" fill="none" stroke="#1e2535" strokeWidth="13" />
                       <g transform="rotate(-90, 50, 50)">
                         {flotaArc > 0 && (
-                          <circle cx="50" cy="50" r="36" fill="none" stroke="#10b981" strokeWidth="14"
-                            strokeDasharray={`${flotaArc} ${circ}`} strokeLinecap="butt" />
+                          <circle cx="50" cy="50" r="36" fill="none" stroke="#10b981" strokeWidth="13"
+                            strokeDasharray={`${flotaArc} ${circ}`} />
                         )}
                         {ventaArc > 0 && (
-                          <circle cx="50" cy="50" r="36" fill="none" stroke="#f59e0b" strokeWidth="14"
+                          <circle cx="50" cy="50" r="36" fill="none" stroke="#f59e0b" strokeWidth="13"
                             strokeDasharray={`${ventaArc} ${circ}`}
-                            transform={`rotate(${flotaPct * 3.6}, 50, 50)`} strokeLinecap="butt" />
+                            transform={`rotate(${flotaPct * 3.6}, 50, 50)`} />
                         )}
                       </g>
-                      <text x="50" y="46" textAnchor="middle" fill="#e2e8f0" fontSize="15" fontWeight="800">{flotaPct}%</text>
-                      <text x="50" y="60" textAnchor="middle" fill="#64748b" fontSize="9">Flota</text>
+                      <text x="50" y="48" textAnchor="middle" fill="#e8eaf0" fontSize="17" fontWeight="800">{flotaPct}%</text>
+                      <text x="50" y="62" textAnchor="middle" fill="#5c6480" fontSize="8" fontWeight="700" letterSpacing="0.5">FLOTA</text>
                     </svg>
-                    <div style={{ display: "flex", gap: 14, fontSize: 11 }}>
-                      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10b981", display: "inline-block" }} />
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 11 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#10b981", display: "inline-block", flexShrink: 0 }} />
                         <span style={{ color: "#10b981", fontWeight: 700 }}>{flotaPct}%</span>
                         <span style={{ color: "var(--t3)" }}>Flota</span>
                       </span>
-                      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b", display: "inline-block" }} />
+                      <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 11 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#f59e0b", display: "inline-block", flexShrink: 0 }} />
                         <span style={{ color: "#f59e0b", fontWeight: 700 }}>{ventaPct}%</span>
                         <span style={{ color: "var(--t3)" }}>Venta</span>
                       </span>
                     </div>
-                    <div className="kpi-lbl" style={{ textAlign: "center" }}>Esfuerzo técnico</div>
+                    <div className="kpi-lbl">Esfuerzo técnico</div>
                   </>
                 );
               })()}
