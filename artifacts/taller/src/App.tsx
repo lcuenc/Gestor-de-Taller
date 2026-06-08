@@ -1182,7 +1182,7 @@ function TecnicosModal({ tecnicos, onSave, onClose, canEdit }: {
 }
 
 // ── Dashboard ─────────────────────────────────────────────────
-function Dashboard({ equipos, gpvList, tecnicos }: { equipos: Equipo[]; gpvList: GPVEntry[]; tecnicos: string[] }) {
+function Dashboard({ equipos, gpvList, tecnicos, enLicencia }: { equipos: Equipo[]; gpvList: GPVEntry[]; tecnicos: string[]; enLicencia: Set<string> }) {
   const enT = equipos.filter(e => ESTADOS_ACTIVOS.has(e.estado));
   const disp = equipos.filter(e => e.estado === ESTADO_DISP);
   const gpvV = gpvList.filter(g => g.fechaEntrega && dGPV(g.fechaEntrega) > 0);
@@ -1191,7 +1191,8 @@ function Dashboard({ equipos, gpvList, tecnicos }: { equipos: Equipo[]; gpvList:
   const cE = (s: string) => equipos.filter(e => e.estado === s).length;
   const ocup = buildOcup(equipos);
   const topT = tecnicos.map(t => ({ t, j: ocup[t] || 0 })).filter(x => x.j > 0).sort((a, b) => b.j - a.j).slice(0, 5);
-  const libres = tecnicos.filter(t => !ocup[t]);
+  const libres = tecnicos.filter(t => !ocup[t] && !enLicencia.has(t));
+  const enLic = tecnicos.filter(t => enLicencia.has(t));
 
   const stats = [
     { l: "En taller",         v: enT.length,                               c: "var(--bl)" },
@@ -1199,7 +1200,7 @@ function Dashboard({ equipos, gpvList, tecnicos }: { equipos: Equipo[]; gpvList:
     { l: "GPV vigentes",      v: gpvV.length,                              c: "var(--em)" },
     { l: "GPV por vencer",    v: gpvA.length,                              c: "var(--am)" },
     { l: "GPV vencidas",      v: gpvVn.length,                             c: "var(--ro)" },
-    { l: "Técnicos libres",   v: tecnicos.length - Object.keys(ocup).length, c: "var(--te)" },
+    { l: "Técnicos libres",   v: libres.length,                            c: "var(--te)" },
   ];
 
   return (
@@ -1266,6 +1267,16 @@ function Dashboard({ equipos, gpvList, tecnicos }: { equipos: Equipo[]; gpvList:
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                     {libres.map(t => (
                       <span key={t} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 99, background: "rgba(16,185,129,.08)", color: "var(--em)", border: "1px solid rgba(16,185,129,.15)", fontWeight: 600 }}>{t.split(" ")[0]}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {enLic.length > 0 && (
+                <div style={{ padding: "8px 16px", borderTop: "1px solid var(--bo)" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "var(--am)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>De licencia</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {enLic.map(t => (
+                      <span key={t} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 99, background: "rgba(245,158,11,.08)", color: "var(--am)", border: "1px solid rgba(245,158,11,.15)", fontWeight: 600 }}>{t.split(" ")[0]}</span>
                     ))}
                   </div>
                 </div>
@@ -3444,7 +3455,7 @@ export default function App() {
             </header>
 
             <main className="content">
-              {tab === "dashboard" && <Dashboard equipos={equipos} gpvList={gpvList} tecnicos={tecnicos} />}
+              {tab === "dashboard" && <Dashboard equipos={equipos} gpvList={gpvList} tecnicos={tecnicos} enLicencia={enLicenciaHoy} />}
               {tab === "kpis" && <KPIsPage equipos={equipos} gpvList={gpvList} tecnicos={tecnicos} onOpenEquipo={m => setModal({ type: "taller", item: m, canEdit: can("taller", "edit") })} />}
               {tab === "layout" && (
                 <LayoutPage
