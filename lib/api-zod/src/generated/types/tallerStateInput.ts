@@ -7,6 +7,7 @@
  */
 import type { Equipo } from './equipo';
 import type { GPVEntry } from './gPVEntry';
+import type { Licencias } from './licencias';
 import type { TallerStateInputLayout } from './tallerStateInputLayout';
 
 export interface TallerStateInput {
@@ -14,6 +15,7 @@ export interface TallerStateInput {
   gpvList: GPVEntry[];
   tecnicos: string[];
   layout: TallerStateInputLayout;
+  licencias: Licencias;
   /**
      * Last-known updatedAt for optimistic concurrency. If it does not match the stored value, the server returns 409.
      * @nullable

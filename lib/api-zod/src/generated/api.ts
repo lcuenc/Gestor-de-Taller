@@ -48,6 +48,26 @@ export const GetTallerStateResponse = zod.object({
 })),
   "tecnicos": zod.array(zod.string()),
   "layout": zod.record(zod.string(), zod.array(zod.number())),
+  "licencias": zod.object({
+  "saldos": zod.record(zod.string(), zod.object({
+  "francos": zod.number(),
+  "vacaciones": zod.number(),
+  "examenes": zod.number()
+})),
+  "registros": zod.array(zod.object({
+  "id": zod.number(),
+  "tecnico": zod.string(),
+  "tipo": zod.string(),
+  "tipoOtra": zod.string().optional(),
+  "saldoTipo": zod.string().optional(),
+  "desde": zod.string().optional(),
+  "hasta": zod.string().optional(),
+  "dias": zod.number(),
+  "observacion": zod.string().optional(),
+  "createdAt": zod.string().optional(),
+  "createdBy": zod.string().optional()
+}))
+}),
   "updatedAt": zod.string().nullish()
 })
 
@@ -83,6 +103,26 @@ export const SaveTallerStateBody = zod.object({
 })),
   "tecnicos": zod.array(zod.string()),
   "layout": zod.record(zod.string(), zod.array(zod.number())),
+  "licencias": zod.object({
+  "saldos": zod.record(zod.string(), zod.object({
+  "francos": zod.number(),
+  "vacaciones": zod.number(),
+  "examenes": zod.number()
+})),
+  "registros": zod.array(zod.object({
+  "id": zod.number(),
+  "tecnico": zod.string(),
+  "tipo": zod.string(),
+  "tipoOtra": zod.string().optional(),
+  "saldoTipo": zod.string().optional(),
+  "desde": zod.string().optional(),
+  "hasta": zod.string().optional(),
+  "dias": zod.number(),
+  "observacion": zod.string().optional(),
+  "createdAt": zod.string().optional(),
+  "createdBy": zod.string().optional()
+}))
+}),
   "expectedUpdatedAt": zod.string().nullish().describe('Last-known updatedAt for optimistic concurrency. If it does not match the stored value, the server returns 409.')
 })
 
@@ -113,6 +153,26 @@ export const SaveTallerStateResponse = zod.object({
 })),
   "tecnicos": zod.array(zod.string()),
   "layout": zod.record(zod.string(), zod.array(zod.number())),
+  "licencias": zod.object({
+  "saldos": zod.record(zod.string(), zod.object({
+  "francos": zod.number(),
+  "vacaciones": zod.number(),
+  "examenes": zod.number()
+})),
+  "registros": zod.array(zod.object({
+  "id": zod.number(),
+  "tecnico": zod.string(),
+  "tipo": zod.string(),
+  "tipoOtra": zod.string().optional(),
+  "saldoTipo": zod.string().optional(),
+  "desde": zod.string().optional(),
+  "hasta": zod.string().optional(),
+  "dias": zod.number(),
+  "observacion": zod.string().optional(),
+  "createdAt": zod.string().optional(),
+  "createdBy": zod.string().optional()
+}))
+}),
   "updatedAt": zod.string().nullish()
 })
 

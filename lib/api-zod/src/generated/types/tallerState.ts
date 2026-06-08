@@ -7,6 +7,7 @@
  */
 import type { Equipo } from './equipo';
 import type { GPVEntry } from './gPVEntry';
+import type { Licencias } from './licencias';
 import type { TallerStateLayout } from './tallerStateLayout';
 
 export interface TallerState {
@@ -14,6 +15,7 @@ export interface TallerState {
   gpvList: GPVEntry[];
   tecnicos: string[];
   layout: TallerStateLayout;
+  licencias: Licencias;
   /** @nullable */
   updatedAt?: string | null;
 }

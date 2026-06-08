@@ -90,6 +90,7 @@ router.get("/taller/state", requireAuth, async (_req, res): Promise<void> => {
       gpvList: [],
       tecnicos: DEFAULT_TECNICOS,
       layout: {},
+      licencias: { saldos: {}, registros: [] },
       updatedAt: null,
     }));
     return;
@@ -100,6 +101,7 @@ router.get("/taller/state", requireAuth, async (_req, res): Promise<void> => {
     gpvList: row.gpvList,
     tecnicos: row.tecnicos,
     layout: row.layout ?? {},
+    licencias: row.licencias ?? { saldos: {}, registros: [] },
     updatedAt: row.updatedAt?.toISOString() ?? null,
   }));
 });
@@ -136,7 +138,7 @@ router.put("/taller/state", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { equipos, gpvList, tecnicos, layout, expectedUpdatedAt } = parsed.data;
+  const { equipos, gpvList, tecnicos, layout, licencias, expectedUpdatedAt } = parsed.data;
 
   // Any write permission (create/edit/delete) on a module counts as "can write that section".
   const perms = req.auth!.role.permissions;
@@ -200,6 +202,9 @@ router.put("/taller/state", requireAuth, async (req, res): Promise<void> => {
         if (sectionChanged(tecnicos, cur.tecnicos) && !canWrite("tecnicos")) {
           return { forbidden: true as const, module: "tecnicos" };
         }
+        if (sectionChanged(licencias ?? {}, cur.licencias ?? {}) && !canWrite("licencias")) {
+          return { forbidden: true as const, module: "licencias" };
+        }
 
         // Record equipo history before updating
         const historyRows = buildHistoryRows(
@@ -213,7 +218,7 @@ router.put("/taller/state", requireAuth, async (req, res): Promise<void> => {
 
         const updated = await tx
           .update(tallerStateTable)
-          .set({ equipos, gpvList, tecnicos, layout })
+          .set({ equipos, gpvList, tecnicos, layout, licencias })
           .where(eq(tallerStateTable.id, cur.id))
           .returning();
         return { row: updated[0] };
@@ -232,7 +237,7 @@ router.put("/taller/state", requireAuth, async (req, res): Promise<void> => {
 
       const inserted = await tx
         .insert(tallerStateTable)
-        .values({ equipos, gpvList, tecnicos, layout })
+        .values({ equipos, gpvList, tecnicos, layout, licencias })
         .returning();
       return { row: inserted[0] };
     });
@@ -249,6 +254,7 @@ router.put("/taller/state", requireAuth, async (req, res): Promise<void> => {
           gpvList: result.row.gpvList,
           tecnicos: result.row.tecnicos,
           layout: result.row.layout ?? {},
+          licencias: result.row.licencias ?? { saldos: {}, registros: [] },
           updatedAt: result.row.updatedAt?.toISOString() ?? null,
         }),
       });
@@ -261,6 +267,7 @@ router.put("/taller/state", requireAuth, async (req, res): Promise<void> => {
       gpvList: row.gpvList,
       tecnicos: row.tecnicos,
       layout: row.layout ?? {},
+      licencias: row.licencias ?? { saldos: {}, registros: [] },
       updatedAt: row.updatedAt?.toISOString() ?? null,
     }));
   } catch (err) {

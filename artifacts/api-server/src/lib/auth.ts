@@ -39,6 +39,7 @@ export const MODULES = [
   "kpis",
   "layout",
   "tecnicos",
+  "licencias",
   "admin",
 ] as const;
 export type ModuleId = (typeof MODULES)[number];

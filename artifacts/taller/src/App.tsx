@@ -28,7 +28,7 @@ import type {
 } from "@workspace/api-client-react";
 
 // ── Permissions model (mirrors backend MODULES) ────────────────
-const MODULES = ["dashboard", "taller", "venta", "kpis", "layout", "tecnicos", "admin"] as const;
+const MODULES = ["dashboard", "taller", "venta", "kpis", "layout", "tecnicos", "licencias", "admin"] as const;
 type ModuleId = (typeof MODULES)[number];
 type PermAction = "view" | "create" | "edit" | "delete";
 const MODULE_LABELS: Record<ModuleId, string> = {
@@ -38,6 +38,7 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   kpis: "KPIs",
   layout: "Layout",
   tecnicos: "Técnicos",
+  licencias: "Licencias",
   admin: "Administración",
 };
 const ACTION_LABELS: Record<PermAction, string> = {
@@ -111,6 +112,81 @@ interface GPVEntry {
   estado: string;
 }
 
+// ── Licencias (gestión de personal) ────────────────────────────
+interface Saldo { francos: number; vacaciones: number; examenes: number }
+interface LicMov {
+  id: number;
+  tecnico: string;
+  tipo: string;        // franco|vacaciones|examen|matrimonio|maternidad|tramites|mudanza|sin_goce|otra|ajuste
+  tipoOtra?: string;   // texto libre cuando tipo === "otra"
+  saldoTipo?: string;  // para ajuste: francos|vacaciones|examenes
+  desde?: string;
+  hasta?: string;
+  dias: number;
+  observacion: string;
+  createdAt: string;
+  createdBy: string;
+}
+interface LicenciasState { saldos: Record<string, Saldo>; registros: LicMov[] }
+
+const SALDO_KEYS = ["francos", "vacaciones", "examenes"] as const;
+type SaldoKey = (typeof SALDO_KEYS)[number];
+const SALDO_LABELS: Record<SaldoKey, string> = {
+  francos: "Francos",
+  vacaciones: "Vacaciones",
+  examenes: "Examen / Estudio",
+};
+
+const LIC_TIPOS: { id: string; label: string; saldo: SaldoKey | null }[] = [
+  { id: "franco",     label: "Franco",                  saldo: "francos" },
+  { id: "vacaciones", label: "Vacaciones",              saldo: "vacaciones" },
+  { id: "examen",     label: "Examen / Estudio",        saldo: "examenes" },
+  { id: "matrimonio", label: "Matrimonio",              saldo: null },
+  { id: "maternidad", label: "Maternidad / Paternidad", saldo: null },
+  { id: "tramites",   label: "Trámites",                saldo: null },
+  { id: "mudanza",    label: "Mudanza",                 saldo: null },
+  { id: "sin_goce",   label: "Sin goce de sueldo",      saldo: null },
+  { id: "otra",       label: "Otra",                    saldo: null },
+];
+const LIC_TIPO_MAP: Record<string, { label: string; saldo: SaldoKey | null }> =
+  Object.fromEntries(LIC_TIPOS.map(t => [t.id, { label: t.label, saldo: t.saldo }]));
+const licTipoLabel = (m: LicMov): string => {
+  if (m.tipo === "ajuste") return "Ajuste de saldo";
+  if (m.tipo === "otra") return m.tipoOtra?.trim() || "Otra";
+  return LIC_TIPO_MAP[m.tipo]?.label ?? m.tipo;
+};
+
+const emptySaldo = (): Saldo => ({ francos: 0, vacaciones: 0, examenes: 0 });
+const round1 = (n: number) => Math.round(n * 10) / 10;
+const newLicId = () => Date.now() * 1000 + Math.floor(Math.random() * 1000);
+const hoyISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+const fmtFecha = (s?: string) => (s ? s.split("-").reverse().join("/") : "");
+
+// cantidad de días inclusiva entre dos fechas YYYY-MM-DD
+const diasEntre = (desde: string, hasta: string): number => {
+  if (!desde || !hasta) return 0;
+  const d = new Date(desde).getTime(), h = new Date(hasta).getTime();
+  if (isNaN(d) || isNaN(h) || h < d) return 0;
+  return Math.floor((h - d) / 86400000) + 1;
+};
+
+// licencia vigente hoy para un técnico (excluye ajustes)
+const licenciaHoy = (registros: LicMov[], tecnico: string): LicMov | null => {
+  const today = hoyISO();
+  for (const r of registros) {
+    if (r.tecnico !== tecnico || r.tipo === "ajuste") continue;
+    if (r.desde && r.hasta && r.desde <= today && today <= r.hasta) return r;
+  }
+  return null;
+};
+const normLicencias = (l?: Partial<LicenciasState> | null): LicenciasState => ({
+  saldos: l?.saldos ?? {},
+  registros: Array.isArray(l?.registros) ? l!.registros! : [],
+});
+
 const buildOcup = (equipos: Equipo[], excId: number | null = null) => {
   const m: Record<string, number> = {};
   equipos.forEach(e => {
@@ -158,6 +234,8 @@ const P: Record<string, string> = {
   arrowR:    "M5 12h14M12 5l7 7-7 7",
   filter:    "M22 3H2l8 9.46V19l4 2V12.46L22 3",
   shield:    "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4",
+  calendar:  "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
+  minus:     "M5 12h14",
   sortAsc:   "M3 6h18M7 12h10M11 18h4",
   sortDesc:  "M3 18h18M7 12h10M11 6h4",
   sort:      "M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4",
@@ -395,12 +473,14 @@ function TecChips({ tecnicos = [] }: { tecnicos?: string[] }) {
 }
 
 // ── TecSelector ───────────────────────────────────────────────
-function TecSelector({ selected, onChange, ocupados, tecnicos }: {
+function TecSelector({ selected, onChange, ocupados, tecnicos, enLicencia }: {
   selected: string[];
   onChange: (v: string[]) => void;
   ocupados: Record<string, number>;
   tecnicos: string[];
+  enLicencia?: Set<string>;
 }) {
+  const lic = enLicencia ?? new Set<string>();
   const disp = tecnicos.filter(t => !ocupados[t]);
   const ocup = tecnicos.filter(t => ocupados[t]);
   const toggle = (t: string) => onChange(selected.includes(t) ? selected.filter(x => x !== t) : [...selected, t]);
@@ -409,15 +489,17 @@ function TecSelector({ selected, onChange, ocupados, tecnicos }: {
     const sel = selected.includes(t);
     const jobs = ocupados[t] || 0;
     const busy = jobs > 0;
+    const onLic = lic.has(t);
     const col = aColor(t);
     return (
       <button type="button" onClick={() => toggle(t)} className="tc"
         style={{
-          borderColor: sel ? col : busy ? "rgba(245,158,11,.3)" : "var(--bo)",
-          background:  sel ? `${col}20` : busy ? "rgba(245,158,11,.06)" : "var(--bg3)",
+          borderColor: sel ? col : onLic ? "rgba(244,63,94,.35)" : busy ? "rgba(245,158,11,.3)" : "var(--bo)",
+          background:  sel ? `${col}20` : onLic ? "rgba(244,63,94,.07)" : busy ? "rgba(245,158,11,.06)" : "var(--bg3)",
         }}>
         <div style={{ width: 20, height: 20, borderRadius: "50%", background: sel ? col : "var(--bg4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 800, color: sel ? "#fff" : "var(--t3)", flexShrink: 0 }}>{inits(t)}</div>
-        <span style={{ color: sel ? col : busy ? "var(--am)" : "var(--t2)" }}>{t}</span>
+        <span style={{ color: sel ? col : onLic ? "var(--ro)" : busy ? "var(--am)" : "var(--t2)" }}>{t}</span>
+        {onLic && <span style={{ fontSize: 10, color: "var(--ro)", background: "rgba(244,63,94,.12)", borderRadius: 99, padding: "0 5px" }}>licencia</span>}
         {busy && <span style={{ fontSize: 10, color: "var(--am)", background: "rgba(245,158,11,.12)", borderRadius: 99, padding: "0 4px" }}>{jobs}</span>}
       </button>
     );
@@ -697,13 +779,14 @@ function GlobalSearch({ equipos, onOpen }: { equipos: Equipo[]; onOpen: (e: Equi
 }
 
 // ── TallerModal ───────────────────────────────────────────────
-function TallerModal({ item, allEquipos, onSave, onClose, tecnicos, canEdit = true }: {
+function TallerModal({ item, allEquipos, onSave, onClose, tecnicos, canEdit = true, enLicencia }: {
   item: Equipo | null;
   allEquipos: Equipo[];
   onSave: (f: Partial<Equipo>) => void;
   onClose: () => void;
   tecnicos: string[];
   canEdit?: boolean;
+  enLicencia?: Set<string>;
 }) {
   const [modalTab, setModalTab] = useState<"datos" | "historial">("datos");
   const [form, setForm] = useState<Partial<Equipo>>(item || {
@@ -820,7 +903,7 @@ function TallerModal({ item, allEquipos, onSave, onClose, tecnicos, canEdit = tr
               <div className="fl">
                 Técnicos {(form.tecnicos?.length ?? 0) > 0 && <span style={{ color: "var(--bl)" }}>({form.tecnicos!.length})</span>}
               </div>
-              <TecSelector selected={form.tecnicos || []} onChange={v => set("tecnicos", v)} ocupados={ocup} tecnicos={tecnicos} />
+              <TecSelector selected={form.tecnicos || []} onChange={v => set("tecnicos", v)} ocupados={ocup} tecnicos={tecnicos} enLicencia={enLicencia} />
             </div>
 
             <div className="fg">
@@ -2524,6 +2607,411 @@ function AdminPage({ can, toast, currentUserId }: {
   );
 }
 
+// ── Licencias: celda de saldo editable ────────────────────────
+function SaldoCell({ value, editable, onSet }: { value: number; editable: boolean; onSet: (v: number) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(value));
+  const neg = value < 0;
+  const commit = () => {
+    const n = parseFloat(draft.replace(",", "."));
+    setEditing(false);
+    if (!isNaN(n)) onSet(round1(n));
+  };
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        type="number"
+        step="0.5"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
+        style={{ width: 64, padding: "4px 6px", textAlign: "center", fontSize: 13, fontWeight: 800, background: "var(--bg2)", border: "1px solid var(--bl)", borderRadius: 6, color: "var(--t)" }}
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      disabled={!editable}
+      onClick={() => { setDraft(String(value)); setEditing(true); }}
+      title={editable ? "Click para editar el saldo" : undefined}
+      style={{
+        minWidth: 52, padding: "4px 8px", borderRadius: 6, fontSize: 14, fontWeight: 800, fontVariantNumeric: "tabular-nums",
+        cursor: editable ? "pointer" : "default",
+        color: neg ? "var(--ro)" : value > 0 ? "var(--t)" : "var(--t3)",
+        background: neg ? "rgba(244,63,94,.1)" : "transparent",
+        border: editable ? "1px dashed var(--bo)" : "1px solid transparent",
+      }}
+    >
+      {value}
+    </button>
+  );
+}
+
+// ── LicenciasPage ─────────────────────────────────────────────
+function LicenciasPage({ tecnicos, licencias, canCreate, canEdit, canDelete, onRegistrar, onSumar, onSetSaldo, onDelete }: {
+  tecnicos: string[];
+  licencias: LicenciasState;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  onRegistrar: () => void;
+  onSumar: () => void;
+  onSetSaldo: (tecnico: string, key: SaldoKey, value: number) => void;
+  onDelete: (m: LicMov) => void;
+}) {
+  const [fTec, setFTec] = useState("");
+  const [fTipo, setFTipo] = useState("");
+  const registros = licencias.registros || [];
+  const saldos = licencias.saldos || {};
+
+  const enLicencia = tecnicos
+    .map(t => ({ t, lic: licenciaHoy(registros, t) }))
+    .filter((x): x is { t: string; lic: LicMov } => !!x.lic);
+
+  const regs = [...registros]
+    .filter(r => (!fTec || r.tecnico === fTec) && (!fTipo || (fTipo === "ajuste" ? r.tipo === "ajuste" : r.tipo === fTipo)))
+    .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Acciones */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {canCreate && (
+          <button className="btn btnp" onClick={onRegistrar}>
+            <Ico n="plus" s={15} c="#fff" /> Registrar licencia
+          </button>
+        )}
+        {canEdit && (
+          <button className="btn btns" onClick={onSumar}>
+            <Ico n="calendar" s={15} /> Sumar días a saldos
+          </button>
+        )}
+      </div>
+
+      {/* Disponibilidad hoy */}
+      <div className="card" style={{ padding: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
+          <Ico n="users" s={15} c="var(--bl)" />
+          <span style={{ fontSize: 13, fontWeight: 800, color: "var(--t)" }}>Disponibilidad de hoy</span>
+          <span style={{ fontSize: 11, color: "var(--t3)" }}>{fmtFecha(hoyISO())}</span>
+        </div>
+        {enLicencia.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: "var(--em)", display: "flex", alignItems: "center", gap: 6 }}>
+            <Ico n="check" s={14} c="var(--em)" /> Todo el personal disponible.
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize: 11.5, color: "var(--t3)", marginBottom: 8 }}>
+              {enLicencia.length} de {tecnicos.length} técnico(s) de licencia hoy:
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {enLicencia.map(({ t, lic }) => (
+                <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(244,63,94,.07)", border: "1px solid rgba(244,63,94,.25)", borderRadius: "var(--r)", padding: "7px 11px" }}>
+                  <div style={{ width: 24, height: 24, borderRadius: "50%", background: aColor(t), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#fff", flexShrink: 0 }}>{inits(t)}</div>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t)" }}>{t}</div>
+                    <div style={{ fontSize: 10.5, color: "var(--ro)" }}>{licTipoLabel(lic)} · regresa {fmtFecha(lic.hasta)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Saldos por técnico */}
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--bo)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <Ico n="calendar" s={15} c="var(--em)" />
+            <span style={{ fontSize: 13, fontWeight: 800, color: "var(--t)" }}>Saldos por técnico</span>
+          </div>
+          {canEdit && <span style={{ fontSize: 10.5, color: "var(--t3)" }}>Click en un valor para ajustarlo</span>}
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table className="tbl" style={{ width: "100%" }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: "left" }}>Técnico</th>
+                {SALDO_KEYS.map(k => <th key={k} style={{ textAlign: "center" }}>{SALDO_LABELS[k]}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {tecnicos.map(t => {
+                const s = saldos[t] ?? emptySaldo();
+                return (
+                  <tr key={t}>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ width: 22, height: 22, borderRadius: "50%", background: aColor(t), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 800, color: "#fff", flexShrink: 0 }}>{inits(t)}</div>
+                        <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--t2)" }}>{t}</span>
+                      </div>
+                    </td>
+                    {SALDO_KEYS.map(k => (
+                      <td key={k} style={{ textAlign: "center" }}>
+                        <SaldoCell value={s[k] ?? 0} editable={canEdit} onSet={v => onSetSaldo(t, k, v)} />
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Registro de movimientos */}
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--bo)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <Ico n="list" s={15} c="var(--bl)" />
+            <span style={{ fontSize: 13, fontWeight: 800, color: "var(--t)" }}>Historial de licencias y ajustes</span>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <select className="inp" value={fTec} onChange={e => setFTec(e.target.value)} style={{ fontSize: 12, padding: "5px 8px", width: "auto" }}>
+              <option value="">Todos los técnicos</option>
+              {tecnicos.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <select className="inp" value={fTipo} onChange={e => setFTipo(e.target.value)} style={{ fontSize: 12, padding: "5px 8px", width: "auto" }}>
+              <option value="">Todos los tipos</option>
+              {LIC_TIPOS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+              <option value="ajuste">Ajuste de saldo</option>
+            </select>
+          </div>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table className="tbl" style={{ width: "100%" }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: "left" }}>Registrado</th>
+                <th style={{ textAlign: "left" }}>Técnico</th>
+                <th style={{ textAlign: "left" }}>Tipo</th>
+                <th style={{ textAlign: "left" }}>Período</th>
+                <th style={{ textAlign: "center" }}>Días</th>
+                <th style={{ textAlign: "left" }}>Observación</th>
+                {canDelete && <th></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {regs.length === 0 ? (
+                <tr><td colSpan={canDelete ? 7 : 6} style={{ textAlign: "center", padding: 22, color: "var(--t3)", fontSize: 12.5 }}>Sin registros.</td></tr>
+              ) : regs.map(r => {
+                const ajuste = r.tipo === "ajuste";
+                const contable = !ajuste && !!LIC_TIPO_MAP[r.tipo]?.saldo;
+                const signo = ajuste ? (r.dias >= 0 ? "+" : "") : "−";
+                return (
+                  <tr key={r.id}>
+                    <td style={{ fontSize: 11.5, color: "var(--t3)", whiteSpace: "nowrap" }}>{fmtFecha((r.createdAt || "").slice(0, 10))}</td>
+                    <td style={{ fontSize: 12, color: "var(--t2)" }}>{r.tecnico}</td>
+                    <td>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, padding: "2px 8px", borderRadius: 99,
+                        color: ajuste ? "var(--bl)" : contable ? "var(--em)" : "var(--am)",
+                        background: ajuste ? "rgba(59,130,246,.12)" : contable ? "rgba(16,185,129,.12)" : "rgba(245,158,11,.12)" }}>
+                        {licTipoLabel(r)}{ajuste && r.saldoTipo ? ` · ${SALDO_LABELS[r.saldoTipo as SaldoKey]}` : ""}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: 11.5, color: "var(--t3)", whiteSpace: "nowrap" }}>{r.desde ? `${fmtFecha(r.desde)} → ${fmtFecha(r.hasta)}` : "—"}</td>
+                    <td style={{ textAlign: "center", fontSize: 13, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: ajuste ? (r.dias >= 0 ? "var(--em)" : "var(--ro)") : "var(--t2)" }}>
+                      {signo}{Math.abs(r.dias)}
+                    </td>
+                    <td style={{ fontSize: 11.5, color: "var(--t3)", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.observacion || "—"}</td>
+                    {canDelete && (
+                      <td style={{ textAlign: "right" }}>
+                        <button className="btni" title="Eliminar registro" onClick={() => onDelete(r)}><Ico n="trash" s={14} c="var(--ro)" /></button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── RegistrarLicenciaModal ────────────────────────────────────
+function RegistrarLicenciaModal({ tecnicos, saldos, onSave, onClose }: {
+  tecnicos: string[];
+  saldos: Record<string, Saldo>;
+  onSave: (mov: Omit<LicMov, "id" | "createdAt" | "createdBy">) => void;
+  onClose: () => void;
+}) {
+  const [tecnico, setTecnico] = useState(tecnicos[0] || "");
+  const [tipo, setTipo] = useState("franco");
+  const [tipoOtra, setTipoOtra] = useState("");
+  const [desde, setDesde] = useState(hoyISO());
+  const [hasta, setHasta] = useState(hoyISO());
+  const [dias, setDias] = useState(1);
+  const [diasManual, setDiasManual] = useState(false);
+  const [obs, setObs] = useState("");
+
+  useEffect(() => {
+    if (!diasManual) setDias(diasEntre(desde, hasta));
+  }, [desde, hasta, diasManual]);
+
+  const info = LIC_TIPO_MAP[tipo];
+  const saldoKey = info?.saldo ?? null;
+  const curSaldo = saldoKey ? (saldos[tecnico]?.[saldoKey] ?? 0) : null;
+  const nuevoSaldo = saldoKey != null && curSaldo != null ? round1(curSaldo - dias) : null;
+
+  const valid = tecnico && desde && hasta && dias > 0 && (tipo !== "otra" || tipoOtra.trim());
+
+  const submit = () => {
+    if (!valid) return;
+    onSave({
+      tecnico, tipo,
+      tipoOtra: tipo === "otra" ? tipoOtra.trim() : undefined,
+      desde, hasta, dias, observacion: obs.trim(),
+    });
+  };
+
+  return (
+    <div className="overlay">
+      <div className="modal" style={{ width: 460 }}>
+        <div className="mh">
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <Ico n="calendar" s={16} c="var(--em)" />
+            <span className="mt">Registrar licencia</span>
+          </div>
+          <button className="btni" onClick={onClose}><Ico n="x" s={15} /></button>
+        </div>
+        <div className="mb" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className="fg">
+            <label className="fl">Técnico</label>
+            <select className="inp" value={tecnico} onChange={e => setTecnico(e.target.value)}>
+              {tecnicos.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div className="fg">
+            <label className="fl">Tipo de licencia</label>
+            <select className="inp" value={tipo} onChange={e => setTipo(e.target.value)}>
+              {LIC_TIPOS.map(t => <option key={t.id} value={t.id}>{t.label}{t.saldo ? " (descuenta saldo)" : ""}</option>)}
+            </select>
+          </div>
+          {tipo === "otra" && (
+            <div className="fg">
+              <label className="fl">Detalle</label>
+              <input className="inp" value={tipoOtra} onChange={e => setTipoOtra(e.target.value)} placeholder="Especificar motivo…" />
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 10 }}>
+            <div className="fg" style={{ flex: 1 }}>
+              <label className="fl">Desde</label>
+              <input className="inp" type="date" value={desde} onChange={e => { setDesde(e.target.value); if (e.target.value > hasta) setHasta(e.target.value); }} />
+            </div>
+            <div className="fg" style={{ flex: 1 }}>
+              <label className="fl">Hasta</label>
+              <input className="inp" type="date" value={hasta} min={desde} onChange={e => setHasta(e.target.value)} />
+            </div>
+            <div className="fg" style={{ width: 90 }}>
+              <label className="fl">Días</label>
+              <input className="inp" type="number" step="0.5" min="0" value={dias}
+                onChange={e => { setDiasManual(true); setDias(parseFloat(e.target.value) || 0); }} />
+            </div>
+          </div>
+          {saldoKey && (
+            <div style={{ fontSize: 12, padding: "9px 11px", borderRadius: "var(--r)", background: "var(--bg3)", border: "1px solid var(--bo)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ color: "var(--t3)" }}>Saldo de {SALDO_LABELS[saldoKey]}</span>
+              <span style={{ fontWeight: 700, color: "var(--t2)" }}>
+                {curSaldo} <span style={{ color: "var(--t3)" }}>→</span> <span style={{ color: (nuevoSaldo ?? 0) < 0 ? "var(--ro)" : "var(--em)" }}>{nuevoSaldo}</span>
+              </span>
+            </div>
+          )}
+          <div className="fg">
+            <label className="fl">Observación</label>
+            <textarea className="inp" rows={2} value={obs} onChange={e => setObs(e.target.value)} placeholder="Opcional…" />
+          </div>
+        </div>
+        <div className="mf">
+          <button className="btn btng" onClick={onClose}>Cancelar</button>
+          <button className="btn btnp" disabled={!valid} onClick={submit}>Registrar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── SumarDiasModal ────────────────────────────────────────────
+function SumarDiasModal({ tecnicos, onSave, onClose }: {
+  tecnicos: string[];
+  onSave: (saldoTipo: SaldoKey, dias: number, techs: string[], motivo: string) => void;
+  onClose: () => void;
+}) {
+  const [saldoTipo, setSaldoTipo] = useState<SaldoKey>("vacaciones");
+  const [dias, setDias] = useState(1);
+  const [sel, setSel] = useState<string[]>([...tecnicos]);
+  const [motivo, setMotivo] = useState("");
+
+  const todos = sel.length === tecnicos.length;
+  const toggleTodos = () => setSel(todos ? [] : [...tecnicos]);
+  const toggle = (t: string) => setSel(s => s.includes(t) ? s.filter(x => x !== t) : [...s, t]);
+  const valid = dias !== 0 && sel.length > 0;
+
+  return (
+    <div className="overlay">
+      <div className="modal" style={{ width: 460 }}>
+        <div className="mh">
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <Ico n="plus" s={16} c="var(--em)" />
+            <span className="mt">Sumar días a saldos</span>
+          </div>
+          <button className="btni" onClick={onClose}><Ico n="x" s={15} /></button>
+        </div>
+        <div className="mb" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", gap: 10 }}>
+            <div className="fg" style={{ flex: 1 }}>
+              <label className="fl">Saldo</label>
+              <select className="inp" value={saldoTipo} onChange={e => setSaldoTipo(e.target.value as SaldoKey)}>
+                {SALDO_KEYS.map(k => <option key={k} value={k}>{SALDO_LABELS[k]}</option>)}
+              </select>
+            </div>
+            <div className="fg" style={{ width: 110 }}>
+              <label className="fl">Días (± )</label>
+              <input className="inp" type="number" step="0.5" value={dias} onChange={e => setDias(parseFloat(e.target.value) || 0)} />
+            </div>
+          </div>
+          <div className="fg">
+            <label className="fl">Motivo</label>
+            <input className="inp" value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ej: Renovación anual, acumulación de francos…" />
+          </div>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
+              <span className="fl" style={{ margin: 0 }}>Técnicos ({sel.length})</span>
+              <button type="button" className="btn btns" style={{ padding: "3px 9px", fontSize: 11 }} onClick={toggleTodos}>
+                {todos ? "Quitar todos" : "Seleccionar todos"}
+              </button>
+            </div>
+            <div className="tgrid" style={{ maxHeight: 180, overflowY: "auto" }}>
+              {tecnicos.map(t => {
+                const on = sel.includes(t);
+                const col = aColor(t);
+                return (
+                  <button key={t} type="button" onClick={() => toggle(t)} className="tc"
+                    style={{ borderColor: on ? col : "var(--bo)", background: on ? `${col}20` : "var(--bg3)" }}>
+                    <div style={{ width: 18, height: 18, borderRadius: "50%", background: on ? col : "var(--bg4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 800, color: on ? "#fff" : "var(--t3)" }}>{inits(t)}</div>
+                    <span style={{ color: on ? col : "var(--t2)" }}>{t}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+        <div className="mf">
+          <button className="btn btng" onClick={onClose}>Cancelar</button>
+          <button className="btn btnp" disabled={!valid} onClick={() => valid && onSave(saldoTipo, round1(dias), sel, motivo.trim())}>
+            Aplicar a {sel.length}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Root App ──────────────────────────────────────────────────
 export default function App() {
   const queryClient = useQueryClient();
@@ -2531,6 +3019,9 @@ export default function App() {
   const [gpvList, setGpvList] = useState<GPVEntry[]>([]);
   const [tecnicos, setTecnicos] = useState<string[]>(DEFAULT_TECNICOS);
   const [layout, setLayout] = useState<LayoutState>({});
+  const [licencias, setLicencias] = useState<LicenciasState>({ saldos: {}, registros: [] });
+  const [licDel, setLicDel] = useState<LicMov | null>(null);
+  const [licModal, setLicModal] = useState<null | "registrar" | "sumar">(null);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [collapsed, setCol] = useState(false);
@@ -2550,6 +3041,7 @@ export default function App() {
     staleTime: 5 * 60_000,
   });
   const auth = !!session;
+  const currentUser = (session as AuthSession | undefined)?.user;
   const { mutate: logout } = useLogout();
 
   const toast = useCallback((msg: string, type = "ok") => {
@@ -2577,6 +3069,7 @@ export default function App() {
     setGpvList(s.gpvList as GPVEntry[]);
     setTecnicos((s.tecnicos as string[]).length > 0 ? s.tecnicos as string[] : DEFAULT_TECNICOS);
     setLayout((s.layout as unknown as LayoutState) ?? {});
+    setLicencias(normLicencias(s.licencias as unknown as LicenciasState));
     lastAppliedAtRef.current = s.updatedAt ?? null;
   }, []);
 
@@ -2622,15 +3115,16 @@ export default function App() {
     toast("No se pudieron guardar los cambios. Reintentá.", "err");
   }, [toast, queryClient, applyApiState]);
 
-  const save = useCallback((eq: Equipo[], gv: GPVEntry[], tecs?: string[], lay?: LayoutState) => {
+  const save = useCallback((eq: Equipo[], gv: GPVEntry[], tecs?: string[], lay?: LayoutState, lic?: LicenciasState) => {
     const techList = tecs ?? tecnicos;
+    const licData = lic ?? licencias;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
       setLayout(cur => {
         const layoutToSave = lay ?? cur;
         saveToApi(
-          { data: { equipos: eq as never[], gpvList: gv as never[], tecnicos: techList, layout: layoutToSave as never, expectedUpdatedAt: lastAppliedAtRef.current } },
+          { data: { equipos: eq as never[], gpvList: gv as never[], tecnicos: techList, layout: layoutToSave as never, licencias: licData as never, expectedUpdatedAt: lastAppliedAtRef.current } },
           {
             onSuccess: (res) => { lastAppliedAtRef.current = (res as TallerState)?.updatedAt ?? null; },
             onError: handleSaveError,
@@ -2639,7 +3133,7 @@ export default function App() {
         return cur;
       });
     }, 600);
-  }, [tecnicos, saveToApi, handleSaveError]);
+  }, [tecnicos, licencias, saveToApi, handleSaveError]);
 
   const upEq = (fn: ((p: Equipo[]) => Equipo[]) | Equipo[]) => {
     setEquipos(prev => {
@@ -2724,6 +3218,68 @@ export default function App() {
     toast("Lista de técnicos actualizada", "inf");
   };
 
+  // ── Licencias handlers ──
+  const licUser = currentUser?.nombre || currentUser?.username || "—";
+  const enLicenciaHoy = new Set(tecnicos.filter(t => licenciaHoy(licencias.registros, t)));
+
+  const saveLicencias = (newLic: LicenciasState) => {
+    setLicencias(newLic);
+    setEquipos(eq => { setGpvList(gv => { save(eq, gv, undefined, undefined, newLic); return gv; }); return eq; });
+  };
+
+  const registrarLicencia = (mov: Omit<LicMov, "id" | "createdAt" | "createdBy">) => {
+    if (!can("licencias", "create")) { toast("No tenés permiso para esta acción", "err"); return; }
+    const full: LicMov = { ...mov, id: newLicId(), createdAt: new Date().toISOString(), createdBy: licUser };
+    const saldos = { ...licencias.saldos };
+    const info = LIC_TIPO_MAP[mov.tipo];
+    if (info?.saldo) {
+      const cur = saldos[mov.tecnico] ?? emptySaldo();
+      saldos[mov.tecnico] = { ...cur, [info.saldo]: round1((cur[info.saldo] ?? 0) - mov.dias) };
+    }
+    saveLicencias({ saldos, registros: [full, ...licencias.registros] });
+    toast("Licencia registrada");
+  };
+
+  const sumarDias = (saldoTipo: SaldoKey, dias: number, techs: string[], motivo: string) => {
+    if (!can("licencias", "edit")) { toast("No tenés permiso para esta acción", "err"); return; }
+    const saldos = { ...licencias.saldos };
+    const nuevos: LicMov[] = [];
+    const now = new Date().toISOString();
+    techs.forEach((t, i) => {
+      const cur = saldos[t] ?? emptySaldo();
+      saldos[t] = { ...cur, [saldoTipo]: round1((cur[saldoTipo] ?? 0) + dias) };
+      nuevos.push({ id: newLicId() + i, tecnico: t, tipo: "ajuste", saldoTipo, dias, observacion: motivo || `Ajuste de ${SALDO_LABELS[saldoTipo]}`, createdAt: now, createdBy: licUser });
+    });
+    saveLicencias({ saldos, registros: [...nuevos, ...licencias.registros] });
+    toast(`${dias > 0 ? "+" : ""}${dias} día(s) de ${SALDO_LABELS[saldoTipo]} · ${techs.length} técnico(s)`);
+  };
+
+  const setSaldoDirecto = (tecnico: string, key: SaldoKey, value: number) => {
+    if (!can("licencias", "edit")) { toast("No tenés permiso para esta acción", "err"); return; }
+    const saldos = { ...licencias.saldos };
+    const cur = saldos[tecnico] ?? emptySaldo();
+    const prev = cur[key] ?? 0;
+    if (prev === value) return;
+    saldos[tecnico] = { ...cur, [key]: value };
+    const mov: LicMov = { id: newLicId(), tecnico, tipo: "ajuste", saldoTipo: key, dias: round1(value - prev), observacion: "Ajuste manual de saldo", createdAt: new Date().toISOString(), createdBy: licUser };
+    saveLicencias({ saldos, registros: [mov, ...licencias.registros] });
+  };
+
+  const deleteLicencia = (mov: LicMov) => {
+    if (!can("licencias", "delete")) { toast("No tenés permiso para esta acción", "err"); return; }
+    const saldos = { ...licencias.saldos };
+    const cur = saldos[mov.tecnico] ?? emptySaldo();
+    if (mov.tipo === "ajuste" && mov.saldoTipo) {
+      saldos[mov.tecnico] = { ...cur, [mov.saldoTipo]: round1((cur[mov.saldoTipo as SaldoKey] ?? 0) - mov.dias) };
+    } else {
+      const info = LIC_TIPO_MAP[mov.tipo];
+      if (info?.saldo) saldos[mov.tecnico] = { ...cur, [info.saldo]: round1((cur[info.saldo] ?? 0) + mov.dias) };
+    }
+    saveLicencias({ saldos, registros: licencias.registros.filter(r => r.id !== mov.id) });
+    setLicDel(null);
+    toast("Registro eliminado", "inf");
+  };
+
   const allNavItems = [
     { id: "dashboard", label: "Dashboard",  icon: "dashboard" },
     { id: "taller",    label: "Taller",     icon: "wrench",   count: enTallerCnt },
@@ -2731,11 +3287,13 @@ export default function App() {
     { id: "kpis",      label: "KPIs",       icon: "kpi" },
     { id: "layout",    label: "Layout",     icon: "bar" },
     { id: "tecnicos",  label: "Técnicos",   icon: "users",    count: tecnicos.length },
+    { id: "licencias", label: "Licencias",  icon: "calendar", count: enLicenciaHoy.size || undefined },
     { id: "admin",     label: "Administración", icon: "shield" },
   ];
   const navItems = allNavItems.filter(n => can(n.id as ModuleId, "view"));
   const titles: Record<string, [string, string]> = {
     dashboard: ["Dashboard", "Resumen general"],
+    licencias: ["Licencias", "Saldos y disponibilidad del personal"],
     taller:    ["Taller", "Equipos en reparación"],
     venta:     ["Venta / GPV", "Disponibles · Garantía por venta"],
     kpis:      ["KPIs — Equipos", "Indicadores de rendimiento operativo"],
@@ -2764,8 +3322,6 @@ export default function App() {
       },
     });
   };
-
-  const currentUser = (session as AuthSession | undefined)?.user;
 
   return (
     <div className="app">
@@ -2891,6 +3447,19 @@ export default function App() {
                   onAddGPV={() => setModal({ type: "gpv", item: null, canEdit: can("venta", "create") })}
                 />
               )}
+              {tab === "licencias" && (
+                <LicenciasPage
+                  tecnicos={tecnicos}
+                  licencias={licencias}
+                  canCreate={can("licencias", "create")}
+                  canEdit={can("licencias", "edit")}
+                  canDelete={can("licencias", "delete")}
+                  onRegistrar={() => setLicModal("registrar")}
+                  onSumar={() => setLicModal("sumar")}
+                  onSetSaldo={setSaldoDirecto}
+                  onDelete={m => setLicDel(m)}
+                />
+              )}
               {tab === "admin" && <AdminPage can={can} toast={toast} currentUserId={currentUser?.id ?? null} />}
               <Toasts toasts={toasts} />
             </main>
@@ -2903,12 +3472,35 @@ export default function App() {
                 onClose={() => setModal(null)}
                 tecnicos={tecnicos}
                 canEdit={modal.canEdit ?? false}
+                enLicencia={enLicenciaHoy}
               />
             )}
             {modal?.type === "gpv" && <ModalGPV item={modal.item as GPVEntry | null} onSave={saveGPV} onClose={() => setModal(null)} canEdit={modal.canEdit ?? false} />}
             {modalE && <ModalEntrega equipo={modalE} onConfirm={confirmarEntrega} onClose={() => setModalE(null)} />}
             {confirmState && <Confirm msg={confirmState.msg} onOk={doDelete} onCancel={() => setConfirm(null)} />}
             {showTecModal && <TecnicosModal tecnicos={tecnicos} onSave={saveTecnicos} onClose={() => setShowTecModal(false)} canEdit={can("tecnicos", "edit")} />}
+            {licModal === "registrar" && (
+              <RegistrarLicenciaModal
+                tecnicos={tecnicos}
+                saldos={licencias.saldos}
+                onSave={mov => { registrarLicencia(mov); setLicModal(null); }}
+                onClose={() => setLicModal(null)}
+              />
+            )}
+            {licModal === "sumar" && (
+              <SumarDiasModal
+                tecnicos={tecnicos}
+                onSave={(st, d, ts, m) => { sumarDias(st, d, ts, m); setLicModal(null); }}
+                onClose={() => setLicModal(null)}
+              />
+            )}
+            {licDel && (
+              <Confirm
+                msg={`Se eliminará el registro de ${licTipoLabel(licDel)} de ${licDel.tecnico}. Si afectaba un saldo, se revertirá.`}
+                onOk={() => deleteLicencia(licDel)}
+                onCancel={() => setLicDel(null)}
+              />
+            )}
           </div>
 
           <nav className="mobnav">

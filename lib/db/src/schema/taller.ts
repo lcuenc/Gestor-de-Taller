@@ -6,6 +6,7 @@ export const tallerStateTable = pgTable("taller_state", {
   gpvList: jsonb("gpv_list").notNull().default([]),
   tecnicos: jsonb("tecnicos").notNull().default([]),
   layout: jsonb("layout").notNull().default({}),
+  licencias: jsonb("licencias").notNull().default({ saldos: {}, registros: [] }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

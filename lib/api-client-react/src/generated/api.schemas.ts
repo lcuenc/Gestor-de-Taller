@@ -36,6 +36,31 @@ export interface GPVEntry {
   estado: string;
 }
 
+export interface LicenciaMov {
+  id: number;
+  tecnico: string;
+  tipo: string;
+  tipoOtra?: string;
+  saldoTipo?: string;
+  desde?: string;
+  hasta?: string;
+  dias: number;
+  observacion?: string;
+  createdAt?: string;
+  createdBy?: string;
+}
+
+export type LicenciasSaldos = {[key: string]: {
+  francos: number;
+  vacaciones: number;
+  examenes: number;
+}};
+
+export interface Licencias {
+  saldos: LicenciasSaldos;
+  registros: LicenciaMov[];
+}
+
 export type TallerStateLayout = {[key: string]: number[]};
 
 export interface TallerState {
@@ -43,6 +68,7 @@ export interface TallerState {
   gpvList: GPVEntry[];
   tecnicos: string[];
   layout: TallerStateLayout;
+  licencias: Licencias;
   /** @nullable */
   updatedAt?: string | null;
 }
@@ -54,6 +80,7 @@ export interface TallerStateInput {
   gpvList: GPVEntry[];
   tecnicos: string[];
   layout: TallerStateInputLayout;
+  licencias: Licencias;
   /**
      * Last-known updatedAt for optimistic concurrency. If it does not match the stored value, the server returns 409.
      * @nullable

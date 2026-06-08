@@ -394,6 +394,49 @@ components:
         - observacion
         - estado
 
+    LicenciaMov:
+      type: object
+      properties:
+        id:          { type: number }
+        tecnico:     { type: string }
+        tipo:        { type: string }
+        tipoOtra:    { type: string }
+        saldoTipo:   { type: string }
+        desde:       { type: string }
+        hasta:       { type: string }
+        dias:        { type: number }
+        observacion: { type: string }
+        createdAt:   { type: string }
+        createdBy:   { type: string }
+      required:
+        - id
+        - tecnico
+        - tipo
+        - dias
+
+    Licencias:
+      type: object
+      properties:
+        saldos:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              francos:    { type: number }
+              vacaciones: { type: number }
+              examenes:   { type: number }
+            required:
+              - francos
+              - vacaciones
+              - examenes
+        registros:
+          type: array
+          items:
+            $ref: "#/components/schemas/LicenciaMov"
+      required:
+        - saldos
+        - registros
+
     TallerState:
       type: object
       properties:
@@ -413,6 +456,8 @@ components:
           additionalProperties:
             type: array
             items: { type: number }
+        licencias:
+          $ref: "#/components/schemas/Licencias"
         updatedAt:
           type: ["string", "null"]
       required:
@@ -420,6 +465,7 @@ components:
         - gpvList
         - tecnicos
         - layout
+        - licencias
 
     TallerStateInput:
       type: object
@@ -440,6 +486,8 @@ components:
           additionalProperties:
             type: array
             items: { type: number }
+        licencias:
+          $ref: "#/components/schemas/Licencias"
         expectedUpdatedAt:
           type: ["string", "null"]
           description: Last-known updatedAt for optimistic concurrency. If it does not match the stored value, the server returns 409.
@@ -448,6 +496,7 @@ components:
         - gpvList
         - tecnicos
         - layout
+        - licencias
 
     EquipoHistoryEntry:
       type: object
