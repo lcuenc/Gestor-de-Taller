@@ -2792,6 +2792,7 @@ function LicenciasPage({ tecnicos, licencias, canCreate, canEdit, canDelete, onR
             <thead>
               <tr>
                 <th style={{ textAlign: "left" }}>Registrado</th>
+                <th style={{ textAlign: "left" }}>Por</th>
                 <th style={{ textAlign: "left" }}>Técnico</th>
                 <th style={{ textAlign: "left" }}>Tipo</th>
                 <th style={{ textAlign: "left" }}>Período</th>
@@ -2802,14 +2803,18 @@ function LicenciasPage({ tecnicos, licencias, canCreate, canEdit, canDelete, onR
             </thead>
             <tbody>
               {regs.length === 0 ? (
-                <tr><td colSpan={canDelete ? 7 : 6} style={{ textAlign: "center", padding: 22, color: "var(--t3)", fontSize: 12.5 }}>Sin registros.</td></tr>
+                <tr><td colSpan={canDelete ? 8 : 7} style={{ textAlign: "center", padding: 22, color: "var(--t3)", fontSize: 12.5 }}>Sin registros.</td></tr>
               ) : regs.map(r => {
                 const ajuste = r.tipo === "ajuste";
                 const contable = !ajuste && !!LIC_TIPO_MAP[r.tipo]?.saldo;
                 const signo = ajuste ? (r.dias >= 0 ? "+" : "") : "−";
                 return (
                   <tr key={r.id}>
-                    <td style={{ fontSize: 11.5, color: "var(--t3)", whiteSpace: "nowrap" }}>{fmtFecha((r.createdAt || "").slice(0, 10))}</td>
+                    <td style={{ fontSize: 11.5, color: "var(--t3)", whiteSpace: "nowrap" }}>
+                      {fmtFecha((r.createdAt || "").slice(0, 10))}
+                      {r.createdAt && <span style={{ color: "var(--t3)", opacity: 0.75, marginLeft: 5 }}>{new Date(r.createdAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</span>}
+                    </td>
+                    <td style={{ fontSize: 12, color: "var(--t2)", whiteSpace: "nowrap" }}>{r.createdBy || "—"}</td>
                     <td style={{ fontSize: 12, color: "var(--t2)" }}>{r.tecnico}</td>
                     <td>
                       <span style={{ fontSize: 11.5, fontWeight: 700, padding: "2px 8px", borderRadius: 99,
