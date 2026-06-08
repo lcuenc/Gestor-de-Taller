@@ -666,7 +666,7 @@ function GlobalSearch({ equipos, onOpen }: { equipos: Equipo[]; onOpen: (e: Equi
             const c = ST[e.estado] || {};
             const isActive = ESTADOS_ACTIVOS.has(e.estado);
             const dias = dDesde(e.fechaIngreso);
-            const alertColor = isActive && dias >= 90 ? "var(--ro)" : isActive && dias >= 60 ? "var(--am)" : null;
+            const alertColor = isActive && dias >= 90 ? "var(--ro)" : isActive && dias >= 60 ? "var(--am)" : isActive && dias >= 30 ? "#f97316" : null;
             return (
               <div
                 key={e.id}
@@ -1407,7 +1407,7 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
               ) : sorted.map(m => {
                 const dias = dDesde(m.fechaIngreso);
                 const isActive = ESTADOS_ACTIVOS.has(m.estado);
-                const diasColor = isActive && dias >= 90 ? "var(--ro)" : isActive && dias >= 60 ? "var(--am)" : "var(--t3)";
+                const diasColor = isActive && dias >= 90 ? "var(--ro)" : isActive && dias >= 60 ? "var(--am)" : isActive && dias >= 30 ? "#f97316" : "var(--t3)";
                 const isRojo = m.prioridad === "rojo";
                 return (
                   <tr key={m.id} style={{ background: isRojo ? "rgba(239,68,68,.04)" : "" }}>
@@ -1427,10 +1427,6 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
                       <span style={{ fontSize: 13, fontWeight: 700, color: diasColor }}>
                         {dias}d
                       </span>
-                      {isActive && dias >= 60 && (
-                        <span title={dias >= 90 ? "Más de 90 días en taller" : "Más de 60 días en taller"}
-                          style={{ marginLeft: 4, fontSize: 10 }}>{dias >= 90 ? "🔴" : "🟡"}</span>
-                      )}
                     </td>
                     <td>
                       {m.prioridad === "rojo" && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "rgba(239,68,68,.12)", color: "var(--ro)", border: "1px solid rgba(239,68,68,.2)", fontWeight: 700 }}>Alta</span>}
@@ -2851,12 +2847,6 @@ export default function App() {
                   equipos={equipos}
                   onOpen={m => setModal({ type: "taller", item: m, canEdit: can("taller", "edit") })}
                 />
-                {tab !== "kpis" && (
-                  <div className="srch">
-                    <Ico n="filter" s={14} c="var(--t3)" />
-                    <input placeholder="Filtrar…" value={search} onChange={e => setSearch(e.target.value)} />
-                  </div>
-                )}
               </div>
             </header>
 
