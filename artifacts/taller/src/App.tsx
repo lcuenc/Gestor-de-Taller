@@ -340,6 +340,11 @@ html,body,#root{margin:0;padding:0;width:100%;height:100%;overflow:hidden;backgr
 .app .fta{resize:vertical;min-height:64px}
 .app .fsel{background:var(--bg3);border:1px solid var(--bo);border-radius:var(--r);padding:7px 10px;font-size:13px;color:var(--t);outline:none}
 .app .fsel option{background:var(--bg3)}
+.app .inp{background:var(--bg3);border:1px solid var(--bo);border-radius:var(--r);padding:7px 10px;font-size:13px;color:var(--t);outline:none;width:100%;transition:border .15s;font-family:inherit;box-sizing:border-box}
+.app .inp:focus{border-color:var(--gr2)}
+.app select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;padding-right:30px}
+.app .inp option{background:var(--bg3);color:var(--t)}
+.app textarea.inp{resize:vertical;min-height:64px}
 .app .trow{display:flex;gap:8px}
 .app .tbtn{flex:1;padding:8px;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--bo);background:var(--bg3);color:var(--t3);transition:all .15s;text-align:center}
 .app .twrap{display:flex;flex-direction:column;gap:6px;padding:6px 0 0}
@@ -2890,7 +2895,7 @@ function RegistrarLicenciaModal({ tecnicos, saldos, onSave, onClose }: {
           <div className="fg">
             <label className="fl">Tipo de licencia</label>
             <select className="inp" value={tipo} onChange={e => setTipo(e.target.value)}>
-              {LIC_TIPOS.map(t => <option key={t.id} value={t.id}>{t.label}{t.saldo ? " (descuenta saldo)" : ""}</option>)}
+              {LIC_TIPOS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
           </div>
           {tipo === "otra" && (
