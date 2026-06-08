@@ -9,6 +9,7 @@
 export * from './authSession';
 export * from './conflict';
 export * from './equipo';
+export * from './equipoHistoryEntry';
 export * from './error';
 export * from './gPVEntry';
 export * from './healthStatus';

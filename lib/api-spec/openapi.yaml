@@ -77,6 +77,32 @@ paths:
               schema:
                 $ref: "#/components/schemas/Conflict"
 
+  /taller/equipos/{equipoId}/history:
+    get:
+      operationId: getEquipoHistory
+      tags: [taller]
+      summary: Get audit history for an equipo
+      parameters:
+        - name: equipoId
+          in: path
+          required: true
+          schema: { type: number }
+      responses:
+        "200":
+          description: History entries ordered newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EquipoHistoryEntry"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /auth/login:
     post:
       operationId: login
@@ -422,6 +448,23 @@ components:
         - gpvList
         - tecnicos
         - layout
+
+    EquipoHistoryEntry:
+      type: object
+      properties:
+        id:            { type: number }
+        equipoId:      { type: number }
+        campo:         { type: string }
+        valorAnterior: { type: ["string", "null"] }
+        valorNuevo:    { type: ["string", "null"] }
+        usuario:       { type: string }
+        timestamp:     { type: string }
+      required:
+        - id
+        - equipoId
+        - campo
+        - usuario
+        - timestamp
 
     Error:
       type: object

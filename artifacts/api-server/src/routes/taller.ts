@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, sql } from "drizzle-orm";
-import { db, tallerStateTable } from "@workspace/db";
+import { eq, sql, desc } from "drizzle-orm";
+import { db, tallerStateTable, equipoHistoryTable, type InsertEquipoHistory } from "@workspace/db";
 import { SaveTallerStateBody, GetTallerStateResponse } from "@workspace/api-zod";
 import { requireAuth, type ModuleId } from "../lib/auth";
 
@@ -16,6 +16,71 @@ const DEFAULT_TECNICOS = [
   "GIMENEZ MARCOS","CABAÑA JESUS","DE LA FUENTE ERIK","LASTRETTI ALAN",
   "HUANCA FACUNDO","CASTRO NEGUEN","RAMIREZ ALEX",
 ];
+
+// Fields to track for per-equipo audit history.
+const TRACKED_FIELDS = ["estado", "tecnicos", "prioridad", "falla", "observacion", "cliente", "modelo", "destino"] as const;
+type TrackedField = (typeof TRACKED_FIELDS)[number];
+
+type EquipoLike = { id: number; modelo?: string; interno?: string } & Record<TrackedField, unknown>;
+
+function fieldToString(field: TrackedField, value: unknown): string {
+  if (field === "tecnicos" && Array.isArray(value)) {
+    return (value as string[]).join(", ") || "—";
+  }
+  return String(value ?? "—");
+}
+
+function buildHistoryRows(
+  oldEquipos: EquipoLike[],
+  newEquipos: EquipoLike[],
+  usuario: string,
+): InsertEquipoHistory[] {
+  const rows: InsertEquipoHistory[] = [];
+
+  for (const newEq of newEquipos) {
+    const oldEq = oldEquipos.find(e => e.id === newEq.id);
+    if (!oldEq) {
+      // New equipo — ingreso event
+      rows.push({
+        equipoId: newEq.id,
+        campo: "ingreso",
+        valorAnterior: null,
+        valorNuevo: [newEq.modelo, newEq.interno].filter(Boolean).join(" — ") || String(newEq.id),
+        usuario,
+      });
+    } else {
+      // Changed fields
+      for (const field of TRACKED_FIELDS) {
+        const oldV = JSON.stringify(oldEq[field] ?? null);
+        const newV = JSON.stringify(newEq[field] ?? null);
+        if (oldV !== newV) {
+          rows.push({
+            equipoId: newEq.id,
+            campo: field,
+            valorAnterior: fieldToString(field, oldEq[field]),
+            valorNuevo: fieldToString(field, newEq[field]),
+            usuario,
+          });
+        }
+      }
+    }
+  }
+
+  // Deleted equipos
+  for (const oldEq of oldEquipos) {
+    if (!newEquipos.find(e => e.id === oldEq.id)) {
+      rows.push({
+        equipoId: oldEq.id,
+        campo: "eliminado",
+        valorAnterior: [oldEq.modelo, oldEq.interno].filter(Boolean).join(" — ") || String(oldEq.id),
+        valorNuevo: null,
+        usuario,
+      });
+    }
+  }
+
+  return rows;
+}
 
 router.get("/taller/state", requireAuth, async (_req, res): Promise<void> => {
   const rows = await db.select().from(tallerStateTable).limit(1);
@@ -37,6 +102,30 @@ router.get("/taller/state", requireAuth, async (_req, res): Promise<void> => {
     layout: row.layout ?? {},
     updatedAt: row.updatedAt?.toISOString() ?? null,
   }));
+});
+
+router.get("/taller/equipos/:equipoId/history", requireAuth, async (req, res): Promise<void> => {
+  const equipoId = Number(req.params.equipoId);
+  if (!Number.isInteger(equipoId) || equipoId <= 0) {
+    res.status(400).json({ error: "equipoId inválido" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(equipoHistoryTable)
+    .where(eq(equipoHistoryTable.equipoId, equipoId))
+    .orderBy(desc(equipoHistoryTable.createdAt))
+    .limit(200);
+
+  res.json(rows.map(r => ({
+    id: r.id,
+    equipoId: r.equipoId,
+    campo: r.campo,
+    valorAnterior: r.valorAnterior ?? null,
+    valorNuevo: r.valorNuevo ?? null,
+    usuario: r.usuario,
+    timestamp: r.createdAt.toISOString(),
+  })));
 });
 
 router.put("/taller/state", requireAuth, async (req, res): Promise<void> => {
@@ -74,6 +163,8 @@ router.put("/taller/state", requireAuth, async (req, res): Promise<void> => {
   const sectionChanged = (a: unknown, b: unknown): boolean =>
     JSON.stringify(canonical(a ?? null)) !== JSON.stringify(canonical(b ?? null));
 
+  const usuario = req.auth!.user.username;
+
   try {
     const result = await db.transaction(async (tx) => {
       // Serialize ALL writers (including the first-ever insert when no row
@@ -109,6 +200,17 @@ router.put("/taller/state", requireAuth, async (req, res): Promise<void> => {
         if (sectionChanged(tecnicos, cur.tecnicos) && !canWrite("tecnicos")) {
           return { forbidden: true as const, module: "tecnicos" };
         }
+
+        // Record equipo history before updating
+        const historyRows = buildHistoryRows(
+          cur.equipos as EquipoLike[],
+          equipos as EquipoLike[],
+          usuario,
+        );
+        if (historyRows.length > 0) {
+          await tx.insert(equipoHistoryTable).values(historyRows);
+        }
+
         const updated = await tx
           .update(tallerStateTable)
           .set({ equipos, gpvList, tecnicos, layout })
@@ -121,6 +223,13 @@ router.put("/taller/state", requireAuth, async (req, res): Promise<void> => {
       if (!canWrite("taller") && !canWrite("venta")) {
         return { forbidden: true as const, module: "taller" };
       }
+
+      // Record ingreso events for all equipos in the initial save
+      const historyRows = buildHistoryRows([], equipos as EquipoLike[], usuario);
+      if (historyRows.length > 0) {
+        await tx.insert(equipoHistoryTable).values(historyRows);
+      }
+
       const inserted = await tx
         .insert(tallerStateTable)
         .values({ equipos, gpvList, tecnicos, layout })

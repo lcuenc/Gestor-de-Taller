@@ -61,6 +61,18 @@ export interface TallerStateInput {
   expectedUpdatedAt?: string | null;
 }
 
+export interface EquipoHistoryEntry {
+  id: number;
+  equipoId: number;
+  campo: string;
+  /** @nullable */
+  valorAnterior?: string | null;
+  /** @nullable */
+  valorNuevo?: string | null;
+  usuario: string;
+  timestamp: string;
+}
+
 export interface Error {
   error: string;
 }

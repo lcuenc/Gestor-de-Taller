@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import * as XLSX from "xlsx";
 import {
   getGetTallerStateQueryOptions,
   useSaveTallerState,
@@ -14,6 +15,7 @@ import {
   useCreateRole,
   useUpdateRole,
   useDeleteRole,
+  useGetEquipoHistory,
 } from "@workspace/api-client-react";
 import type {
   User,
@@ -22,6 +24,7 @@ import type {
   RolePermissions,
   AuthSession,
   TallerState,
+  EquipoHistoryEntry,
 } from "@workspace/api-client-react";
 
 // ── Permissions model (mirrors backend MODULES) ────────────────
@@ -313,6 +316,39 @@ html,body,#root{margin:0;padding:0;width:100%;height:100%;overflow:hidden;backgr
 .app .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .app .tec-row{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--bo)}
 .app .tec-row:last-child{border-bottom:none}
+.app .srch-result:hover{background:rgba(255,255,255,.04)}
+.app .gs-wrap{position:relative}
+.app .gs-panel{position:absolute;right:0;top:calc(100% + 6px);width:360px;background:var(--bg2);border:1px solid var(--bo2);border-radius:var(--r2);box-shadow:0 8px 32px rgba(0,0,0,.55);z-index:500;overflow:hidden;max-height:420px;overflow-y:auto}
+.app .hist-timeline{display:flex;flex-direction:column}
+.app .hist-row{display:flex;gap:12px;padding:0 0 20px;position:relative}
+.app .hist-row:not(:last-child):before{content:"";position:absolute;left:13px;top:30px;bottom:0;width:1px;background:var(--bo)}
+.app .hist-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid}
+.app .hist-body{flex:1;min-width:0;padding-top:3px}
+.app .hist-campo{font-size:12px;font-weight:700;color:var(--t);margin-bottom:4px}
+.app .hist-vals{font-size:11px;color:var(--t3);display:flex;flex-direction:column;gap:3px}
+.app .hist-ts{font-size:10px;color:var(--t3);margin-top:5px;display:flex;align-items:center;gap:4px}
+.app .mobnav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--bo);z-index:200}
+.app .mobnav-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:9px 4px 8px;gap:3px;cursor:pointer;color:var(--t3);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border:none;background:none}
+.app .mobnav-item.act{color:var(--em)}
+@media(max-width:768px){
+  html,body,#root{overflow:auto}
+  .app{overflow:auto;height:auto;min-height:100vh}
+  .app .shell{height:auto;min-height:100vh;padding-bottom:62px}
+  .app .sidebar{display:none!important}
+  .app .main{height:auto;overflow:unset}
+  .app .content{padding:10px;overflow-y:unset}
+  .app .modal{width:100%!important;max-width:100vw!important;height:100dvh!important;max-height:100dvh!important;border-radius:0!important}
+  .app .topbar{padding:8px 10px}
+  .app .mobnav{display:flex}
+  .app .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+  .app .grid2,.app .grid22,.app .grid3{grid-template-columns:1fr}
+  .app .fr{grid-template-columns:1fr}
+  .app .srch{width:160px}
+  .app .gs-panel{width:calc(100vw - 20px);right:-10px}
+  .app .bay-grid{padding-bottom:8px}
+  .app .sub-tab-bar{width:100%}
+  .app .sh{flex-wrap:wrap;gap:8px}
+}
 `;
 
 // ── Atoms ─────────────────────────────────────────────────────
@@ -521,6 +557,144 @@ function Login({ onLogin }: { onLogin: () => void }) {
   );
 }
 
+// ── History helpers ────────────────────────────────────────────
+const CAMPO_LABELS: Record<string, string> = {
+  ingreso: "Ingreso registrado", eliminado: "Eliminado del taller",
+  estado: "Cambio de estado", tecnicos: "Técnicos asignados",
+  prioridad: "Prioridad", falla: "Falla / Trabajo",
+  observacion: "Observación", cliente: "Cliente",
+  modelo: "Modelo", destino: "Destino",
+};
+const CAMPO_ICO: Record<string, string> = {
+  ingreso: "plus", eliminado: "trash", estado: "sync",
+  tecnicos: "users", prioridad: "alert", default: "edit",
+};
+const CAMPO_COLOR: Record<string, string> = {
+  ingreso: "#10b981", eliminado: "#ef4444", estado: "#3b82f6",
+  tecnicos: "#6366f1", prioridad: "#f59e0b", falla: "#8b5cf6",
+  observacion: "#9aa3b8", cliente: "#9aa3b8", modelo: "#9aa3b8", destino: "#9aa3b8",
+};
+
+function HistoryEntry({ entry }: { entry: EquipoHistoryEntry }) {
+  const color  = CAMPO_COLOR[entry.campo] || "#9aa3b8";
+  const label  = CAMPO_LABELS[entry.campo] || entry.campo;
+  const ico    = CAMPO_ICO[entry.campo]   || CAMPO_ICO.default;
+  const isPure = entry.campo === "ingreso" || entry.campo === "eliminado";
+  const ts     = new Date(entry.timestamp).toLocaleString("es-AR", {
+    day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+  return (
+    <div className="hist-row">
+      <div className="hist-dot" style={{ background: `${color}18`, borderColor: `${color}44`, color }}>
+        <Ico n={ico} s={12} />
+      </div>
+      <div className="hist-body">
+        <div className="hist-campo">{label}</div>
+        {!isPure && (
+          <div className="hist-vals">
+            {entry.valorAnterior != null && (
+              <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+                <span style={{ color: "var(--ro)", fontWeight: 700, fontSize: 12 }}>−</span>
+                <span style={{ textDecoration: "line-through", color: "var(--t3)" }}>{entry.valorAnterior || "—"}</span>
+              </div>
+            )}
+            {entry.valorNuevo != null && (
+              <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+                <span style={{ color: "#10b981", fontWeight: 700, fontSize: 12 }}>+</span>
+                <span style={{ color: "var(--t2)" }}>{entry.valorNuevo || "—"}</span>
+              </div>
+            )}
+          </div>
+        )}
+        {isPure && (entry.valorNuevo || entry.valorAnterior) && (
+          <div className="hist-vals">
+            <span style={{ color: "var(--t2)" }}>{entry.valorNuevo || entry.valorAnterior}</span>
+          </div>
+        )}
+        <div className="hist-ts">
+          <Ico n="clock" s={10} c="var(--t3)" />{ts} · <span style={{ fontWeight: 600 }}>{entry.usuario}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── GlobalSearch ───────────────────────────────────────────────
+function GlobalSearch({ equipos, onOpen }: { equipos: Equipo[]; onOpen: (e: Equipo) => void }) {
+  const [q, setQ]       = useState("");
+  const [open, setOpen] = useState(false);
+  const ref             = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fn = (ev: MouseEvent) => {
+      if (ref.current && !ref.current.contains(ev.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, []);
+
+  const results = q.trim().length < 2 ? [] : equipos.filter(e => {
+    const ql = q.toLowerCase();
+    return [e.modelo, e.interno, e.cliente, e.falla, e.observacion]
+      .some(f => f?.toLowerCase().includes(ql));
+  }).slice(0, 12);
+
+  return (
+    <div className="gs-wrap" ref={ref}>
+      <div className="srch" style={{ width: 200 }}>
+        <Ico n="filter" s={14} c="var(--t3)" />
+        <input
+          placeholder="Buscar equipo…"
+          value={q}
+          onChange={e => { setQ(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+        />
+        {q && (
+          <button className="btni" style={{ padding: 2, marginRight: -2 }}
+            onClick={() => { setQ(""); setOpen(false); }}>
+            <Ico n="x" s={11} />
+          </button>
+        )}
+      </div>
+      {open && results.length > 0 && (
+        <div className="gs-panel">
+          <div style={{ padding: "6px 12px", borderBottom: "1px solid var(--bo)", fontSize: 10, color: "var(--t3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em" }}>
+            {results.length} resultado{results.length !== 1 ? "s" : ""}
+          </div>
+          {results.map(e => {
+            const c = ST[e.estado] || {};
+            const isActive = ESTADOS_ACTIVOS.has(e.estado);
+            const dias = dDesde(e.fechaIngreso);
+            const alertColor = isActive && dias >= 90 ? "var(--ro)" : isActive && dias >= 60 ? "var(--am)" : null;
+            return (
+              <div
+                key={e.id}
+                className="srch-result"
+                onClick={() => { onOpen(e); setOpen(false); setQ(""); }}
+                style={{ padding: "8px 12px", borderBottom: "1px solid var(--bo)", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {e.modelo}
+                    {e.interno && <span style={{ fontSize: 10, color: "var(--t3)", marginLeft: 6, fontFamily: "monospace" }}>{e.interno}</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--t3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {e.cliente || "Sin cliente"} · {e.estado}
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
+                  <span className="badge" style={{ fontSize: 10, background: c.bg, color: c.color, border: `1px solid ${c.border}`, padding: "1px 6px" }}>{e.estado}</span>
+                  {alertColor && <span style={{ fontSize: 10, fontWeight: 700, color: alertColor }}>{dias}d ⚠</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── TallerModal ───────────────────────────────────────────────
 function TallerModal({ item, allEquipos, onSave, onClose, tecnicos, canEdit = true }: {
   item: Equipo | null;
@@ -530,6 +704,7 @@ function TallerModal({ item, allEquipos, onSave, onClose, tecnicos, canEdit = tr
   tecnicos: string[];
   canEdit?: boolean;
 }) {
+  const [modalTab, setModalTab] = useState<"datos" | "historial">("datos");
   const [form, setForm] = useState<Partial<Equipo>>(item || {
     destino: "alquiler", modelo: "", interno: "", accesorio: "", cliente: "",
     fechaIngreso: new Date().toISOString().slice(0, 10),
@@ -539,111 +714,144 @@ function TallerModal({ item, allEquipos, onSave, onClose, tecnicos, canEdit = tr
   const ocup = buildOcup(allEquipos, item?.id ?? null);
   const estados = form.destino === "venta" ? [...ESTADOS_TALLER, ESTADO_LISTO] : ESTADOS_TALLER;
 
+  const { data: rawHistory = [], isLoading: histLoading } = useGetEquipoHistory(
+    item?.id ?? 0,
+  );
+  const history = item ? rawHistory : [];
+
   return (
     <div className="overlay">
       <div className="modal">
         <div className="mh">
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
             <Ico n="wrench" s={15} c="var(--em)" />
-            <span className="mt">{item ? "Editar equipo" : "Registrar ingreso"}</span>
+            <span className="mt">{item ? item.modelo : "Registrar ingreso"}</span>
           </div>
-          <button className="btni" onClick={onClose}><Ico n="x" s={15} /></button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {item && (
+              <div className="sub-tab-bar" style={{ marginBottom: 0 }}>
+                <button className={`sub-tab${modalTab === "datos" ? " active" : ""}`} onClick={() => setModalTab("datos")}>Datos</button>
+                <button className={`sub-tab${modalTab === "historial" ? " active" : ""}`} onClick={() => setModalTab("historial")}>
+                  Historial{history.length > 0 ? ` (${history.length})` : ""}
+                </button>
+              </div>
+            )}
+            <button className="btni" onClick={onClose}><Ico n="x" s={15} /></button>
+          </div>
         </div>
 
-        <div className="mb">
-          <div className="fg">
-            <div className="fl">Destino del equipo</div>
-            <div className="trow">
-              {([["alquiler", "Alquiler / Flota"], ["venta", "Venta de usado"]] as [string, string][]).map(([k, l]) => (
-                <button key={k} type="button" className="tbtn"
-                  onClick={() => { set("destino", k); if (k === "alquiler" && form.estado === ESTADO_LISTO) set("estado", "A inspeccionar"); }}
-                  style={{
-                    borderColor: form.destino === k ? (k === "venta" ? "#a855f7" : "var(--bl)") : "var(--bo)",
-                    background:  form.destino === k ? (k === "venta" ? "rgba(168,85,247,.12)" : "rgba(59,130,246,.12)") : "var(--bg3)",
-                    color:       form.destino === k ? (k === "venta" ? "#c084fc" : "var(--bl)") : "var(--t3)",
-                  }}>
-                  {l}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="fr">
+        {modalTab === "datos" && (
+          <div className="mb">
             <div className="fg">
-              <label className="fl">Modelo *</label>
-              <input className="fi" value={form.modelo || ""} onChange={e => set("modelo", e.target.value)} placeholder="Ej: PC350" />
-            </div>
-            <div className="fg">
-              <label className="fl">Nº Interno</label>
-              <input className="fi" value={form.interno || ""} onChange={e => set("interno", e.target.value)} placeholder="Ej: EX-001" />
-            </div>
-          </div>
-
-          <div className="fr">
-            <div className="fg">
-              <label className="fl">Accesorio</label>
-              <input className="fi" value={form.accesorio || ""} onChange={e => set("accesorio", e.target.value)} placeholder="Ej: A061550" />
-            </div>
-            <div className="fg">
-              <label className="fl">Fecha ingreso</label>
-              <input type="date" className="fi" value={form.fechaIngreso || ""} onChange={e => set("fechaIngreso", e.target.value)} />
-            </div>
-          </div>
-
-          <div className="fg">
-            <label className="fl">Cliente / Propietario</label>
-            <input className="fi" value={form.cliente || ""} onChange={e => set("cliente", e.target.value)}
-              placeholder={form.destino === "venta" ? "Stock propio" : "Nombre o empresa"} />
-          </div>
-
-          <div className="fg">
-            <div className="fl">Estado en taller</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-              {estados.map(s => {
-                const c = ST[s] || {};
-                const act = form.estado === s;
-                return (
-                  <button key={s} type="button" onClick={() => set("estado", s)} className={`chip ${act ? "on" : ""}`}
-                    style={{ borderColor: act ? c.border : "var(--bo)", background: act ? c.bg : "transparent", color: act ? c.color : "var(--t3)" }}>
-                    {s}
+              <div className="fl">Destino del equipo</div>
+              <div className="trow">
+                {([["alquiler", "Alquiler / Flota"], ["venta", "Venta de usado"]] as [string, string][]).map(([k, l]) => (
+                  <button key={k} type="button" className="tbtn"
+                    onClick={() => { set("destino", k); if (k === "alquiler" && form.estado === ESTADO_LISTO) set("estado", "A inspeccionar"); }}
+                    style={{
+                      borderColor: form.destino === k ? (k === "venta" ? "#a855f7" : "var(--bl)") : "var(--bo)",
+                      background:  form.destino === k ? (k === "venta" ? "rgba(168,85,247,.12)" : "rgba(59,130,246,.12)") : "var(--bg3)",
+                      color:       form.destino === k ? (k === "venta" ? "#c084fc" : "var(--bl)") : "var(--t3)",
+                    }}>
+                    {l}
                   </button>
-                );
-              })}
+                ))}
+              </div>
+            </div>
+
+            <div className="fr">
+              <div className="fg">
+                <label className="fl">Modelo *</label>
+                <input className="fi" value={form.modelo || ""} onChange={e => set("modelo", e.target.value)} placeholder="Ej: PC350" />
+              </div>
+              <div className="fg">
+                <label className="fl">Nº Interno</label>
+                <input className="fi" value={form.interno || ""} onChange={e => set("interno", e.target.value)} placeholder="Ej: EX-001" />
+              </div>
+            </div>
+
+            <div className="fr">
+              <div className="fg">
+                <label className="fl">Accesorio</label>
+                <input className="fi" value={form.accesorio || ""} onChange={e => set("accesorio", e.target.value)} placeholder="Ej: A061550" />
+              </div>
+              <div className="fg">
+                <label className="fl">Fecha ingreso</label>
+                <input type="date" className="fi" value={form.fechaIngreso || ""} onChange={e => set("fechaIngreso", e.target.value)} />
+              </div>
+            </div>
+
+            <div className="fg">
+              <label className="fl">Cliente / Propietario</label>
+              <input className="fi" value={form.cliente || ""} onChange={e => set("cliente", e.target.value)}
+                placeholder={form.destino === "venta" ? "Stock propio" : "Nombre o empresa"} />
+            </div>
+
+            <div className="fg">
+              <div className="fl">Estado en taller</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {estados.map(s => {
+                  const c = ST[s] || {};
+                  const act = form.estado === s;
+                  return (
+                    <button key={s} type="button" onClick={() => set("estado", s)} className={`chip ${act ? "on" : ""}`}
+                      style={{ borderColor: act ? c.border : "var(--bo)", background: act ? c.bg : "transparent", color: act ? c.color : "var(--t3)" }}>
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="fg">
+              <div className="fl">Prioridad</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {([["ninguna", "Sin prioridad", "var(--t3)", "var(--bo)"], ["amarillo", "Media", "var(--am)", "rgba(245,158,11,.3)"], ["rojo", "Alta", "var(--ro)", "rgba(239,68,68,.3)"]] as [string, string, string, string][]).map(([k, l, col, bc]) => (
+                  <button key={k} type="button" onClick={() => set("prioridad", k)} className={`chip ${form.prioridad === k ? "on" : ""}`}
+                    style={{ borderColor: form.prioridad === k ? bc : "var(--bo)", background: form.prioridad === k ? `${col}18` : "transparent", color: form.prioridad === k ? col : "var(--t3)" }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="fg">
+              <div className="fl">
+                Técnicos {(form.tecnicos?.length ?? 0) > 0 && <span style={{ color: "var(--bl)" }}>({form.tecnicos!.length})</span>}
+              </div>
+              <TecSelector selected={form.tecnicos || []} onChange={v => set("tecnicos", v)} ocupados={ocup} tecnicos={tecnicos} />
+            </div>
+
+            <div className="fg">
+              <label className="fl">Falla / Trabajo</label>
+              <textarea className="fta" value={form.falla || ""} onChange={e => set("falla", e.target.value)} placeholder="Describir falla o trabajo…" />
+            </div>
+            <div className="fg">
+              <label className="fl">Observaciones</label>
+              <textarea className="fta" value={form.observacion || ""} onChange={e => set("observacion", e.target.value)} placeholder="Repuestos, estado, notas…" />
             </div>
           </div>
+        )}
 
-          <div className="fg">
-            <div className="fl">Prioridad</div>
-            <div style={{ display: "flex", gap: 6 }}>
-              {([["ninguna", "Sin prioridad", "var(--t3)", "var(--bo)"], ["amarillo", "Media", "var(--am)", "rgba(245,158,11,.3)"], ["rojo", "Alta", "var(--ro)", "rgba(239,68,68,.3)"]] as [string, string, string, string][]).map(([k, l, col, bc]) => (
-                <button key={k} type="button" onClick={() => set("prioridad", k)} className={`chip ${form.prioridad === k ? "on" : ""}`}
-                  style={{ borderColor: form.prioridad === k ? bc : "var(--bo)", background: form.prioridad === k ? `${col}18` : "transparent", color: form.prioridad === k ? col : "var(--t3)" }}>
-                  {l}
-                </button>
-              ))}
-            </div>
+        {modalTab === "historial" && (
+          <div className="mb">
+            {histLoading ? (
+              <div className="empty">Cargando historial…</div>
+            ) : (history as EquipoHistoryEntry[]).length === 0 ? (
+              <div className="empty">Sin historial registrado para este equipo.</div>
+            ) : (
+              <div className="hist-timeline">
+                {(history as EquipoHistoryEntry[]).map(h => (
+                  <HistoryEntry key={h.id} entry={h} />
+                ))}
+              </div>
+            )}
           </div>
-
-          <div className="fg">
-            <div className="fl">
-              Técnicos {(form.tecnicos?.length ?? 0) > 0 && <span style={{ color: "var(--bl)" }}>({form.tecnicos!.length})</span>}
-            </div>
-            <TecSelector selected={form.tecnicos || []} onChange={v => set("tecnicos", v)} ocupados={ocup} tecnicos={tecnicos} />
-          </div>
-
-          <div className="fg">
-            <label className="fl">Falla / Trabajo</label>
-            <textarea className="fta" value={form.falla || ""} onChange={e => set("falla", e.target.value)} placeholder="Describir falla o trabajo…" />
-          </div>
-          <div className="fg">
-            <label className="fl">Observaciones</label>
-            <textarea className="fta" value={form.observacion || ""} onChange={e => set("observacion", e.target.value)} placeholder="Repuestos, estado, notas…" />
-          </div>
-        </div>
+        )}
 
         <div className="mf">
           <button className="btn btns" onClick={onClose}>{canEdit ? "Cancelar" : "Cerrar"}</button>
-          {canEdit && (
+          {canEdit && modalTab === "datos" && (
             <button className="btn btnp" onClick={() => { if (!form.modelo?.trim()) return; onSave(form); }}>
               <Ico n="save" s={14} c="#fff" />{item ? "Guardar" : "Registrar"}
             </button>
@@ -1101,13 +1309,41 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
     style: { cursor: "pointer" as const },
   });
 
+  const exportExcel = () => {
+    const data = sorted.map(m => ({
+      "Modelo": m.modelo,
+      "Nº Interno": m.interno || "",
+      "Accesorio": m.accesorio || "",
+      "Cliente": m.cliente || "",
+      "Destino": m.destino === "venta" ? "Venta" : "Alquiler",
+      "Estado": m.estado,
+      "Prioridad": m.prioridad === "rojo" ? "Alta" : m.prioridad === "amarillo" ? "Media" : "—",
+      "Técnicos": ((m.tecnicos || []) as string[]).join(", "),
+      "Días en taller": dDesde(m.fechaIngreso),
+      "Fecha ingreso": m.fechaIngreso,
+      "Falla / Trabajo": m.falla || "",
+      "Observación": m.observacion || "",
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Taller");
+    XLSX.writeFile(wb, `taller_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   return (
     <div>
       <div className="sh">
         <div style={{ fontSize: 13, color: "var(--t2)", fontWeight: 600 }}>
           {sorted.length} equipo{sorted.length !== 1 ? "s" : ""} <span style={{ color: "var(--t3)", fontWeight: 400 }}>en esta vista</span>
         </div>
-        {canCreate && <button className="btn btnp" onClick={onAdd}><Ico n="plus" s={14} c="#fff" />Registrar ingreso</button>}
+        <div style={{ display: "flex", gap: 6 }}>
+          {sorted.length > 0 && (
+            <button className="btn btns" onClick={exportExcel} title="Exportar a Excel">
+              <Ico n="download" s={14} c="var(--em)" />Excel
+            </button>
+          )}
+          {canCreate && <button className="btn btnp" onClick={onAdd}><Ico n="plus" s={14} c="#fff" />Registrar ingreso</button>}
+        </div>
       </div>
 
       <div className="fb">
@@ -1169,7 +1405,8 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
                 <tr><td colSpan={11}><div className="empty">No hay equipos</div></td></tr>
               ) : sorted.map(m => {
                 const dias = dDesde(m.fechaIngreso);
-                const largo = ESTADOS_ACTIVOS.has(m.estado) && dias > 14;
+                const isActive = ESTADOS_ACTIVOS.has(m.estado);
+                const diasColor = isActive && dias >= 90 ? "var(--ro)" : isActive && dias >= 60 ? "var(--am)" : "var(--t3)";
                 const isRojo = m.prioridad === "rojo";
                 return (
                   <tr key={m.id} style={{ background: isRojo ? "rgba(239,68,68,.04)" : "" }}>
@@ -1185,7 +1422,15 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
                     <td><StBadge s={m.estado} /></td>
                     <td style={{ minWidth: 120 }}><TecChips tecnicos={m.tecnicos} /></td>
                     <td style={{ fontSize: 11, fontFamily: "monospace", color: "var(--t3)" }}>{m.fechaIngreso}</td>
-                    <td><span style={{ fontSize: 13, fontWeight: 700, color: largo ? "var(--am)" : "var(--t3)" }}>{dias}d</span></td>
+                    <td>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: diasColor }}>
+                        {dias}d
+                      </span>
+                      {isActive && dias >= 60 && (
+                        <span title={dias >= 90 ? "Más de 90 días en taller" : "Más de 60 días en taller"}
+                          style={{ marginLeft: 4, fontSize: 10 }}>{dias >= 90 ? "🔴" : "🟡"}</span>
+                      )}
+                    </td>
                     <td>
                       {m.prioridad === "rojo" && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "rgba(239,68,68,.12)", color: "var(--ro)", border: "1px solid rgba(239,68,68,.2)", fontWeight: 700 }}>Alta</span>}
                       {m.prioridad === "amarillo" && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "rgba(245,158,11,.12)", color: "var(--am)", border: "1px solid rgba(245,158,11,.2)", fontWeight: 700 }}>Media</span>}
@@ -2594,17 +2839,21 @@ export default function App() {
                 <div style={{ fontSize: 15, fontWeight: 700, color: "var(--t)" }}>{titles[tab]?.[0] ?? ""}</div>
                 <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 1 }}>{titles[tab]?.[1] ?? ""}</div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 {isFetching && !apiLoading && (
                   <div style={{ display: "flex", alignItems: "center", gap: 5 }} title="Sincronizando con el servidor…">
                     <div className="sync-dot" />
                     <span style={{ fontSize: 10, color: "var(--t3)" }}>sync</span>
                   </div>
                 )}
+                <GlobalSearch
+                  equipos={equipos}
+                  onOpen={m => setModal({ type: "taller", item: m, canEdit: can("taller", "edit") })}
+                />
                 {tab !== "kpis" && (
                   <div className="srch">
                     <Ico n="filter" s={14} c="var(--t3)" />
-                    <input placeholder="Buscar…" value={search} onChange={e => setSearch(e.target.value)} />
+                    <input placeholder="Filtrar…" value={search} onChange={e => setSearch(e.target.value)} />
                   </div>
                 )}
               </div>
@@ -2670,6 +2919,19 @@ export default function App() {
             {confirmState && <Confirm msg={confirmState.msg} onOk={doDelete} onCancel={() => setConfirm(null)} />}
             {showTecModal && <TecnicosModal tecnicos={tecnicos} onSave={saveTecnicos} onClose={() => setShowTecModal(false)} canEdit={can("tecnicos", "edit")} />}
           </div>
+
+          <nav className="mobnav">
+            {navItems.filter(n => n.id !== "tecnicos" && n.id !== "admin").map(n => (
+              <button
+                key={n.id}
+                className={`mobnav-item${tab === n.id ? " act" : ""}`}
+                onClick={() => setTab(n.id)}
+              >
+                <Ico n={n.icon} s={20} c={tab === n.id ? "var(--em)" : "var(--t3)"} />
+                <span>{n.label.split("/")[0].trim()}</span>
+              </button>
+            ))}
+          </nav>
         </div>
       )}
     </div>

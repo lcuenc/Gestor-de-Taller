@@ -22,6 +22,7 @@ import type {
 import type {
   AuthSession,
   Conflict,
+  EquipoHistoryEntry,
   Error,
   HealthStatus,
   LoginInput,
@@ -274,6 +275,83 @@ export const useSaveTallerState = <TError = ErrorType<Error | Conflict>,
       > => {
       return useMutation(getSaveTallerStateMutationOptions(options));
     }
+
+export const getGetEquipoHistoryUrl = (equipoId: number,) => {
+
+
+
+
+  return `/api/taller/equipos/${equipoId}/history`
+}
+
+/**
+ * @summary Get audit history for an equipo
+ */
+export const getEquipoHistory = async (equipoId: number, options?: RequestInit): Promise<EquipoHistoryEntry[]> => {
+
+  return customFetch<EquipoHistoryEntry[]>(getGetEquipoHistoryUrl(equipoId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetEquipoHistoryQueryKey = (equipoId: number,) => {
+    return [
+    `/api/taller/equipos/${equipoId}/history`
+    ] as const;
+    }
+
+
+export const getGetEquipoHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getEquipoHistory>>, TError = ErrorType<Error>>(equipoId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEquipoHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetEquipoHistoryQueryKey(equipoId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getEquipoHistory>>> = ({ signal }) => getEquipoHistory(equipoId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(equipoId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getEquipoHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetEquipoHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getEquipoHistory>>>
+export type GetEquipoHistoryQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Get audit history for an equipo
+ */
+
+export function useGetEquipoHistory<TData = Awaited<ReturnType<typeof getEquipoHistory>>, TError = ErrorType<Error>>(
+ equipoId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEquipoHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetEquipoHistoryQueryOptions(equipoId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getLoginUrl = () => {
 

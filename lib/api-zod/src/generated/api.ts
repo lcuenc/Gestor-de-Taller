@@ -118,6 +118,25 @@ export const SaveTallerStateResponse = zod.object({
 
 
 /**
+ * @summary Get audit history for an equipo
+ */
+export const GetEquipoHistoryParams = zod.object({
+  "equipoId": zod.coerce.number()
+})
+
+export const GetEquipoHistoryResponseItem = zod.object({
+  "id": zod.number(),
+  "equipoId": zod.number(),
+  "campo": zod.string(),
+  "valorAnterior": zod.string().nullish(),
+  "valorNuevo": zod.string().nullish(),
+  "usuario": zod.string(),
+  "timestamp": zod.string()
+})
+export const GetEquipoHistoryResponse = zod.array(GetEquipoHistoryResponseItem)
+
+
+/**
  * @summary Log in with username and password
  */
 
