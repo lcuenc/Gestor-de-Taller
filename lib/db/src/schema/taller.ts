@@ -1,4 +1,4 @@
-import { pgTable, serial, jsonb, timestamp, integer, text } from "drizzle-orm/pg-core";
+import { pgTable, serial, jsonb, timestamp, integer, bigint, text } from "drizzle-orm/pg-core";
 
 export const tallerStateTable = pgTable("taller_state", {
   id: serial("id").primaryKey(),
@@ -11,7 +11,7 @@ export const tallerStateTable = pgTable("taller_state", {
 
 export const equipoHistoryTable = pgTable("equipo_history", {
   id: serial("id").primaryKey(),
-  equipoId: integer("equipo_id").notNull(),
+  equipoId: bigint("equipo_id", { mode: "number" }).notNull(),
   campo: text("campo").notNull(),
   valorAnterior: text("valor_anterior"),
   valorNuevo: text("valor_nuevo"),
