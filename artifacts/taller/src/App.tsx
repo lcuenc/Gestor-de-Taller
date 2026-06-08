@@ -2669,6 +2669,8 @@ function LicenciasPage({ tecnicos, licencias, canCreate, canEdit, canDelete, onR
 }) {
   const [fTec, setFTec] = useState("");
   const [fTipo, setFTipo] = useState("");
+  const [perPage, setPerPage] = useState(25);
+  const [page, setPage] = useState(0);
   const registros = licencias.registros || [];
   const saldos = licencias.saldos || {};
 
@@ -2679,6 +2681,13 @@ function LicenciasPage({ tecnicos, licencias, canCreate, canEdit, canDelete, onR
   const regs = [...registros]
     .filter(r => (!fTec || r.tecnico === fTec) && (!fTipo || (fTipo === "ajuste" ? r.tipo === "ajuste" : r.tipo === fTipo)))
     .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+
+  useEffect(() => { setPage(0); }, [fTec, fTipo, perPage]);
+  const totalPages = Math.max(1, Math.ceil(regs.length / perPage));
+  const curPage = Math.min(page, totalPages - 1);
+  const pageRegs = regs.slice(curPage * perPage, curPage * perPage + perPage);
+  const desde1 = regs.length === 0 ? 0 : curPage * perPage + 1;
+  const hasta1 = Math.min(regs.length, curPage * perPage + perPage);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -2804,7 +2813,7 @@ function LicenciasPage({ tecnicos, licencias, canCreate, canEdit, canDelete, onR
             <tbody>
               {regs.length === 0 ? (
                 <tr><td colSpan={canDelete ? 8 : 7} style={{ textAlign: "center", padding: 22, color: "var(--t3)", fontSize: 12.5 }}>Sin registros.</td></tr>
-              ) : regs.map(r => {
+              ) : pageRegs.map(r => {
                 const ajuste = r.tipo === "ajuste";
                 const contable = !ajuste && !!LIC_TIPO_MAP[r.tipo]?.saldo;
                 const signo = ajuste ? (r.dias >= 0 ? "+" : "") : "−";
@@ -2839,6 +2848,24 @@ function LicenciasPage({ tecnicos, licencias, canCreate, canEdit, canDelete, onR
             </tbody>
           </table>
         </div>
+        {regs.length > 0 && (
+          <div style={{ padding: "10px 14px", borderTop: "1px solid var(--bo)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, color: "var(--t3)" }}>
+              <span>Líneas:</span>
+              <select className="inp" value={perPage} onChange={e => setPerPage(Number(e.target.value))} style={{ fontSize: 12, padding: "4px 6px", width: "auto" }}>
+                {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <span>{desde1}–{hasta1} de {regs.length}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button className="btn btns" disabled={curPage <= 0} onClick={() => setPage(0)} title="Primera" style={{ padding: "5px 8px" }}>«</button>
+              <button className="btn btns" disabled={curPage <= 0} onClick={() => setPage(curPage - 1)} title="Anterior" style={{ padding: "5px 8px" }}>‹</button>
+              <span style={{ fontSize: 11.5, color: "var(--t2)", minWidth: 96, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>Hoja {curPage + 1} de {totalPages}</span>
+              <button className="btn btns" disabled={curPage >= totalPages - 1} onClick={() => setPage(curPage + 1)} title="Siguiente" style={{ padding: "5px 8px" }}>›</button>
+              <button className="btn btns" disabled={curPage >= totalPages - 1} onClick={() => setPage(totalPages - 1)} title="Última" style={{ padding: "5px 8px" }}>»</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
