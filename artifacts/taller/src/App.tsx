@@ -433,6 +433,10 @@ html,body,#root{margin:0;padding:0;width:100%;height:100%;overflow:hidden;backgr
 .app .prio-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;border:1px solid;white-space:nowrap;flex-shrink:0}
 .app .prio-select{background:var(--bg3);border:1px solid var(--bo);border-radius:99px;padding:4px 10px;font-size:11px;font-weight:700;outline:none;cursor:pointer;flex-shrink:0;font-family:inherit}
 .app .prio-select option{background:var(--bg2);color:var(--t)}
+.app .agenda-ts{max-height:440px;overflow-y:auto}
+.app .agenda-ts::-webkit-scrollbar{width:5px}
+.app .agenda-ts::-webkit-scrollbar-thumb{background:var(--bo2);border-radius:99px}
+.app .agenda-ts thead th{position:sticky;top:0;background:var(--bg2);z-index:1}
 .app .srch-result:hover{background:rgba(255,255,255,.04)}
 .app .gs-wrap{position:relative}
 .app .gs-panel{position:absolute;right:0;top:calc(100% + 6px);width:360px;background:var(--bg2);border:1px solid var(--bo2);border-radius:var(--r2);box-shadow:0 8px 32px rgba(0,0,0,.55);z-index:500;overflow:hidden;max-height:420px;overflow-y:auto}
@@ -2868,74 +2872,108 @@ function AgendaPage({ toast }: { toast: (msg: string, type?: string) => void }) 
   const row = (t: Todo) => {
     const p = prioOf(t);
     return (
-      <div key={t.id} className="todo-row" style={{ borderLeft: `3px solid ${t.hecho ? "var(--bo)" : PRIO_META[p].color}` }}>
-        <button
-          className="btni"
-          onClick={() => toggle(t)}
-          title={t.hecho ? "Marcar como pendiente" : "Marcar como hecha"}
-          style={{ flexShrink: 0 }}
-        >
-          <div style={{
-            width: 18, height: 18, borderRadius: 5,
-            border: `1.5px solid ${t.hecho ? "var(--em)" : "var(--bo2)"}`,
-            background: t.hecho ? "var(--em)" : "transparent",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            {t.hecho && <Ico n="check" s={12} c="#fff" />}
-          </div>
-        </button>
+      <tr key={t.id}>
+        <td style={{ width: 1, paddingRight: 0, borderLeft: `3px solid ${t.hecho ? "var(--bo)" : PRIO_META[p].color}` }}>
+          <button
+            className="btni"
+            onClick={() => toggle(t)}
+            title={t.hecho ? "Marcar como pendiente" : "Marcar como hecha"}
+          >
+            <div style={{
+              width: 18, height: 18, borderRadius: 5,
+              border: `1.5px solid ${t.hecho ? "var(--em)" : "var(--bo2)"}`,
+              background: t.hecho ? "var(--em)" : "transparent",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              {t.hecho && <Ico n="check" s={12} c="#fff" />}
+            </div>
+          </button>
+        </td>
         {editId === t.id ? (
-          <>
-            <input
-              className="fi"
-              value={editVal}
-              onChange={e => setEditVal(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditId(null); }}
-              style={{ flex: 1 }}
-              autoFocus
-            />
-            <button className="btn btnp" style={{ fontSize: 11, padding: "4px 10px" }} onClick={saveEdit}><Ico n="check" s={12} c="#fff" />Guardar</button>
-            <button className="btni" onClick={() => setEditId(null)}><Ico n="x" s={14} /></button>
-          </>
+          <td colSpan={5}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                className="fi"
+                value={editVal}
+                onChange={e => setEditVal(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditId(null); }}
+                style={{ flex: 1 }}
+                autoFocus
+              />
+              <button className="btn btnp" style={{ fontSize: 11, padding: "4px 10px" }} onClick={saveEdit}><Ico n="check" s={12} c="#fff" />Guardar</button>
+              <button className="btni" onClick={() => setEditId(null)}><Ico n="x" s={14} /></button>
+            </div>
+          </td>
         ) : (
           <>
-            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+            <td>
               <span style={{
                 fontSize: 13, fontWeight: 500,
                 color: t.hecho ? "var(--t3)" : "var(--t)",
                 textDecoration: t.hecho ? "line-through" : "none",
                 wordBreak: "break-word",
               }}>{t.texto}</span>
-              <div className="todo-meta">
-                <span title="Fecha de anotación"><Ico n="plus" s={11} c="var(--t3)" />Anotada {fmtFechaHora(t.createdAt)}</span>
-                {t.hecho && t.completedAt && (
-                  <span title="Fecha de finalización" style={{ color: "var(--em)" }}><Ico n="check" s={11} c="var(--em)" />Completada {fmtFechaHora(t.completedAt)}</span>
-                )}
-              </div>
-            </div>
-            {t.hecho ? (
-              <PrioBadge p={p} />
-            ) : (
-              <select
-                className="prio-select"
-                value={p}
-                onChange={e => setPrio(t, e.target.value as Prioridad)}
-                title="Cambiar prioridad"
-                style={{ borderColor: PRIO_META[p].color, color: PRIO_META[p].color }}
-              >
-                {PRIO_ORDER.map(pr => <option key={pr} value={pr}>{PRIO_META[pr].label}</option>)}
-              </select>
-            )}
-            <button className="btni" onClick={() => { setEditId(t.id); setEditVal(t.texto); }} title="Editar"><Ico n="edit" s={14} /></button>
-            <button className="btni" onClick={() => remove(t.id)} title="Eliminar"><Ico n="trash" s={14} c="var(--ro)" /></button>
+            </td>
+            <td style={{ whiteSpace: "nowrap" }}>
+              {t.hecho ? (
+                <PrioBadge p={p} />
+              ) : (
+                <select
+                  className="prio-select"
+                  value={p}
+                  onChange={e => setPrio(t, e.target.value as Prioridad)}
+                  title="Cambiar prioridad"
+                  style={{ borderColor: PRIO_META[p].color, color: PRIO_META[p].color }}
+                >
+                  {PRIO_ORDER.map(pr => <option key={pr} value={pr}>{PRIO_META[pr].label}</option>)}
+                </select>
+              )}
+            </td>
+            <td style={{ whiteSpace: "nowrap", fontSize: 12, color: "var(--t3)" }}>{fmtFechaHora(t.createdAt)}</td>
+            <td style={{ whiteSpace: "nowrap", fontSize: 12, color: t.completedAt ? "var(--em)" : "var(--t3)" }}>
+              {t.hecho && t.completedAt ? fmtFechaHora(t.completedAt) : "—"}
+            </td>
+            <td style={{ width: 1, whiteSpace: "nowrap", textAlign: "right" }}>
+              <button className="btni" onClick={() => { setEditId(t.id); setEditVal(t.texto); }} title="Editar"><Ico n="edit" s={14} /></button>
+              <button className="btni" onClick={() => remove(t.id)} title="Eliminar"><Ico n="trash" s={14} c="var(--ro)" /></button>
+            </td>
           </>
         )}
-      </div>
+      </tr>
     );
   };
 
+  const sheet = (icon: string, color: string, title: string, items: Todo[], emptyText: string) => (
+    <div className="tw" style={{ marginBottom: 18 }}>
+      <div className="th">
+        <Ico n={icon} s={15} c={color} />
+        <span className="tt">{title}</span>
+        <span className="nb" style={{ marginLeft: "auto" }}>{items.length}</span>
+      </div>
+      {items.length === 0 ? (
+        <div className="empty" style={{ padding: "22px 0" }}>{emptyText}</div>
+      ) : (
+        <div className="ts agenda-ts">
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 1 }} aria-label="Estado"></th>
+                <th>Tarea</th>
+                <th>Prioridad</th>
+                <th>Anotada</th>
+                <th>Completada</th>
+                <th style={{ width: 1 }} aria-label="Acciones"></th>
+              </tr>
+            </thead>
+            <tbody>{items.map(row)}</tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <div style={{ maxWidth: 760 }}>
+    <div style={{ maxWidth: 860 }}>
       <div className="card" style={{ padding: 16, marginBottom: 18 }}>
         <div className="fl" style={{ marginBottom: 8 }}>Nueva tarea / nota</div>
         <div className="agenda-add">
@@ -2968,24 +3006,8 @@ function AgendaPage({ toast }: { toast: (msg: string, type?: string) => void }) 
         <div className="empty">No tenés tareas anotadas todavía.</div>
       ) : (
         <>
-          <div className="sblbl" style={{ margin: "0 0 8px 2px", display: "flex", alignItems: "center", gap: 6 }}>
-            <Ico n="list" s={13} c="var(--am)" />Pendientes ({pendientes.length})
-          </div>
-          <div className="card" style={{ padding: 6, marginBottom: 18 }}>
-            {pendientes.length === 0
-              ? <div className="empty" style={{ padding: "18px 0" }}>Sin pendientes</div>
-              : pendientes.map(row)}
-          </div>
-          {hechas.length > 0 && (
-            <>
-              <div className="sblbl" style={{ margin: "0 0 8px 2px", display: "flex", alignItems: "center", gap: 6 }}>
-                <Ico n="check" s={13} c="var(--em)" />Completadas ({hechas.length})
-              </div>
-              <div className="card" style={{ padding: 6 }}>
-                {hechas.map(row)}
-              </div>
-            </>
-          )}
+          {sheet("list", "var(--am)", "Pendientes", pendientes, "Sin pendientes")}
+          {hechas.length > 0 && sheet("check", "var(--em)", "Completadas", hechas, "Sin tareas completadas")}
         </>
       )}
     </div>
