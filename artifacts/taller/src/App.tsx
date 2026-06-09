@@ -3159,12 +3159,12 @@ function ProjectModal({ initial, onClose, onSave }: {
   const save = () => { const v = nombre.trim(); if (!v) return; onSave({ nombre: v, compartido, color }); };
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="modal" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
-        <div className="mhd">
-          <span className="mtt">{editing ? "Editar proyecto" : "Nuevo proyecto"}</span>
+      <div className="modal modalsm" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
+        <div className="mh">
+          <span className="mt">{editing ? "Editar proyecto" : "Nuevo proyecto"}</span>
           <button className="btni" onClick={onClose}><Ico n="x" s={16} /></button>
         </div>
-        <div className="mbd">
+        <div className="mb">
           <div className="fg">
             <label className="fl">Nombre</label>
             <input className="fi" value={nombre} autoFocus onChange={e => setNombre(e.target.value)}
@@ -3193,7 +3193,7 @@ function ProjectModal({ initial, onClose, onSave }: {
             </div>
           </div>
         </div>
-        <div className="mft">
+        <div className="mf">
           <button className="btn btns" onClick={onClose}>Cancelar</button>
           <button className="btn btnp" onClick={save} disabled={!nombre.trim()}>
             <Ico n="check" s={14} c="#fff" />{editing ? "Guardar" : "Crear proyecto"}
