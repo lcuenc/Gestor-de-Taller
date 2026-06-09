@@ -1640,29 +1640,27 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
 
       <div className="fb">
         <Ico n="filter" s={12} c="var(--t3)" />
-        {[{ k: "Activos", l: "En taller" }, { k: "Todos", l: "Todos" }, ...ESTADOS_TALLER.map(s => ({ k: s, l: s })), { k: ESTADO_LISTO, l: "Listo" }].map(f => (
-          <button key={f.k} className={`chip ${ef === f.k ? "on" : ""}`} onClick={() => setEf(f.k)}>{f.l}</button>
-        ))}
-        <div className="sep" />
-        {["Todos", "alquiler", "venta"].map(d => (
-          <button key={d} className={`chip ${df === d ? "on" : ""}`} onClick={() => setDf(d)}>
-            {d === "Todos" ? "Todos" : d === "venta" ? "Venta" : "Alquiler"}
-          </button>
-        ))}
-        <div className="sep" />
-        {["Todos", "equipo", "accesorio"].map(a => (
-          <button key={a} className={`chip ${af === a ? "on" : ""}`} onClick={() => setAf(a)}>
-            {a === "Todos" ? "Todos" : a === "equipo" ? "Equipos" : "Accesorios"}
-          </button>
-        ))}
+        <select className="fsel" value={ef} onChange={e => setEf(e.target.value)}>
+          <option value="Activos">En taller</option>
+          <option value="Todos">Todos los estados</option>
+          {ESTADOS_TALLER.map(s => <option key={s} value={s}>{s}</option>)}
+          <option value={ESTADO_LISTO}>Listo</option>
+        </select>
+        <select className="fsel" value={df} onChange={e => setDf(e.target.value)}>
+          <option value="Todos">Todos los destinos</option>
+          <option value="alquiler">Alquiler</option>
+          <option value="venta">Venta</option>
+        </select>
+        <select className="fsel" value={af} onChange={e => setAf(e.target.value)}>
+          <option value="Todos">Todos los tipos</option>
+          <option value="equipo">Equipos</option>
+          <option value="accesorio">Accesorios</option>
+        </select>
         {tecConEq.length > 0 && (
-          <>
-            <div className="sep" />
-            <select className="fsel" value={tf} onChange={e => setTf(e.target.value)}>
-              <option value="Todos">Todos los técnicos</option>
-              {tecConEq.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </>
+          <select className="fsel" value={tf} onChange={e => setTf(e.target.value)}>
+            <option value="Todos">Todos los técnicos</option>
+            {tecConEq.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
         )}
       </div>
 
