@@ -24,6 +24,8 @@ export interface Equipo {
   prioridad: string;
   /** @nullable */
   enVentaDesde?: string | null;
+  /** @nullable */
+  fechaEstimada?: string | null;
 }
 
 export interface GPVEntry {

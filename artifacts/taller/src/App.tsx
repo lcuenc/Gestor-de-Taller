@@ -66,6 +66,8 @@ const ESTADO_LISTO = "Listo";
 const ESTADO_DISP = "Disponible";
 const ESTADO_VEND = "Vendido";
 const ESTADOS_ACTIVOS = new Set([...ESTADOS_TALLER, ESTADO_LISTO]);
+// equipos que aún se están trabajando (excluye "Listo") — base para alertas de demora
+const EN_PROCESO = new Set(ESTADOS_TALLER);
 const DIAS_GPV = 90;
 
 const ST: Record<string, { bg: string; color: string; border: string }> = {
@@ -85,6 +87,20 @@ const aColor = (n: string) => { let h=0; for (let i=0;i<n.length;i++) h=(h*31+n.
 const inits = (n: string) => (n||"").split(" ").map((w: string)=>w[0]).join("").slice(0,2).toUpperCase();
 const dDesde = (f: string) => f ? Math.floor((Date.now()-new Date(f).getTime())/86400000) : 0;
 const dGPV = (f: string) => DIAS_GPV - dDesde(f);
+// días (con signo) entre HOY y una fecha YYYY-MM-DD. >0 faltan, 0 hoy, <0 atrasado
+const diasHasta = (f?: string): number | null => {
+  if (!f) return null;
+  const [y, m, d] = f.split("-").map(Number);
+  const [ty, tm, td] = hoyISO().split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(ty, tm - 1, td)) / 86400000);
+};
+// ¿equipo en proceso y pasado de su fecha estimada de entrega?
+const estaAtrasado = (e: Equipo): boolean => {
+  if (!e.fechaEstimada || !EN_PROCESO.has(e.estado)) return false;
+  const d = diasHasta(e.fechaEstimada);
+  return d !== null && d < 0;
+};
 
 interface Equipo {
   id: number;
@@ -100,6 +116,7 @@ interface Equipo {
   observacion: string;
   prioridad: string;
   enVentaDesde?: string;
+  fechaEstimada?: string;
 }
 
 interface GPVEntry {
@@ -210,6 +227,7 @@ const normalizeEquipo = (e: Partial<Equipo>): Equipo => ({
   observacion: e.observacion || "",
   prioridad: e.prioridad || "ninguna",
   enVentaDesde: e.enVentaDesde,
+  fechaEstimada: e.fechaEstimada,
 });
 
 // ── Icons ─────────────────────────────────────────────────────
@@ -458,6 +476,26 @@ function GPVBadge({ f }: { f: string }) {
   const r = dGPV(f);
   if (r <= 0) return <span style={{ fontSize: 12, color: "var(--t3)" }}>Vencida ({-r}d)</span>;
   return <span style={{ fontSize: 13, fontWeight: 700, color: r <= 15 ? "var(--am)" : "var(--em)" }}>{r}d {r <= 15 ? "⚠" : "✓"}</span>;
+}
+
+// Indicador de fecha estimada de entrega + estado (faltan / hoy / atrasado)
+function EntregaEst({ e }: { e: Equipo }) {
+  if (!e.fechaEstimada) return <span style={{ color: "var(--t3)", fontSize: 11 }}>—</span>;
+  const d = diasHasta(e.fechaEstimada);
+  const enProc = EN_PROCESO.has(e.estado);
+  let color = "var(--t3)", txt = "";
+  if (d === null) return <span style={{ color: "var(--t3)", fontSize: 11 }}>—</span>;
+  if (!enProc) { color = "var(--t3)"; txt = "—"; }
+  else if (d < 0) { color = "var(--ro)"; txt = `Atrasado ${-d}d`; }
+  else if (d === 0) { color = "var(--am)"; txt = "Vence hoy"; }
+  else if (d <= 3) { color = "var(--am)"; txt = `Faltan ${d}d`; }
+  else { color = "var(--em)"; txt = `Faltan ${d}d`; }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <span style={{ fontSize: 11, fontFamily: "monospace", color: "var(--t3)" }}>{fmtFecha(e.fechaEstimada)}</span>
+      {txt !== "—" && <span style={{ fontSize: 10.5, fontWeight: 700, color }}>{txt}</span>}
+    </div>
+  );
 }
 
 function TecChips({ tecnicos = [] }: { tecnicos?: string[] }) {
@@ -871,6 +909,11 @@ function TallerModal({ item, allEquipos, onSave, onClose, tecnicos, canEdit = tr
             </div>
 
             <div className="fg">
+              <label className="fl">Entrega estimada <span style={{ color: "var(--t3)", fontWeight: 400 }}>(opcional)</span></label>
+              <input type="date" className="fi" value={form.fechaEstimada || ""} onChange={e => set("fechaEstimada", e.target.value)} />
+            </div>
+
+            <div className="fg">
               <label className="fl">Cliente / Propietario</label>
               <input className="fi" value={form.cliente || ""} onChange={e => set("cliente", e.target.value)}
                 placeholder={form.destino === "venta" ? "Stock propio" : "Nombre o empresa"} />
@@ -1194,10 +1237,12 @@ function Dashboard({ equipos, gpvList, tecnicos, enLicencia }: { equipos: Equipo
   const libres = tecnicos.filter(t => !ocup[t] && !enLicencia.has(t));
   const enLic = tecnicos.filter(t => enLicencia.has(t));
 
+  const atrasados = equipos.filter(estaAtrasado).sort((a, b) => (diasHasta(a.fechaEstimada) ?? 0) - (diasHasta(b.fechaEstimada) ?? 0));
+
   const stats = [
     { l: "En taller",         v: enT.length,                               c: "var(--bl)" },
+    { l: "Entregas atrasadas", v: atrasados.length,                        c: "var(--ro)" },
     { l: "Disponibles venta", v: disp.length,                              c: "var(--pu)" },
-    { l: "GPV vigentes",      v: gpvV.length,                              c: "var(--em)" },
     { l: "GPV por vencer",    v: gpvA.length,                              c: "var(--am)" },
     { l: "GPV vencidas",      v: gpvVn.length,                             c: "var(--ro)" },
     { l: "Técnicos libres",   v: libres.length,                            c: "var(--te)" },
@@ -1315,6 +1360,34 @@ function Dashboard({ equipos, gpvList, tecnicos, enLicencia }: { equipos: Equipo
         </div>
 
         <div className="tw">
+          <div className="th">
+            <Ico n="alert" s={14} c="var(--ro)" />
+            <span className="tt">Entregas atrasadas</span>
+            {atrasados.length > 0 && <span className="na" style={{ marginLeft: "auto", background: "rgba(244,63,94,.15)", color: "var(--ro)" }}>{atrasados.length}</span>}
+          </div>
+          {atrasados.length === 0 ? (
+            <div className="empty">Sin entregas atrasadas ✓</div>
+          ) : (
+            atrasados.slice(0, 6).map(e => {
+              const d = diasHasta(e.fechaEstimada) ?? 0;
+              return (
+                <div key={e.id} className="ri">
+                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--ro)", flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--t)" }}>{e.modelo}</div>
+                    <div style={{ fontSize: 11, color: "var(--t3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.cliente || "Stock propio"} · {e.estado}</div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ro)" }}>{-d}d</div>
+                    <div style={{ fontSize: 10, color: "var(--t3)" }}>{fmtFecha(e.fechaEstimada)}</div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="tw">
           <div className="th"><Ico n="clock" s={14} c="var(--t3)" /><span className="tt">Últimos ingresos</span></div>
           {[...equipos].sort((a, b) => new Date(b.fechaIngreso).getTime() - new Date(a.fechaIngreso).getTime()).slice(0, 5).map(m => {
             const c = ST[m.estado] || {};
@@ -1388,6 +1461,7 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
       case "destino":  va = a.destino.toLowerCase();  vb = b.destino.toLowerCase(); break;
       case "dias":     va = dDesde(a.fechaIngreso);   vb = dDesde(b.fechaIngreso); break;
       case "fechaIngreso": va = a.fechaIngreso; vb = b.fechaIngreso; break;
+      case "fechaEstimada": va = a.fechaEstimada || "9999"; vb = b.fechaEstimada || "9999"; break;
       case "prioridad": {
         const pOrd: Record<string, number> = { rojo: 0, amarillo: 1, ninguna: 2 };
         va = pOrd[a.prioridad] ?? 2; vb = pOrd[b.prioridad] ?? 2; break;
@@ -1421,6 +1495,13 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
       "Técnicos": ((m.tecnicos || []) as string[]).join(", "),
       "Días en taller": dDesde(m.fechaIngreso),
       "Fecha ingreso": m.fechaIngreso,
+      "Entrega estimada": m.fechaEstimada || "",
+      "Estado entrega": (() => {
+        if (!m.fechaEstimada || !EN_PROCESO.has(m.estado)) return "";
+        const d = diasHasta(m.fechaEstimada);
+        if (d === null) return "";
+        return d < 0 ? `Atrasado ${-d}d` : d === 0 ? "Vence hoy" : `Faltan ${d}d`;
+      })(),
       "Falla / Trabajo": m.falla || "",
       "Observación": m.observacion || "",
     }));
@@ -1493,6 +1574,9 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
                 <th {...thProps("dias")}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>Días <SortIcon col="dias" sortCol={sortCol} sortDir={sortDir} /></div>
                 </th>
+                <th {...thProps("fechaEstimada")}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>Entrega est. <SortIcon col="fechaEstimada" sortCol={sortCol} sortDir={sortDir} /></div>
+                </th>
                 <th {...thProps("prioridad")}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>Prior. <SortIcon col="prioridad" sortCol={sortCol} sortDir={sortDir} /></div>
                 </th>
@@ -1502,7 +1586,7 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
             </thead>
             <tbody>
               {!sorted.length ? (
-                <tr><td colSpan={11}><div className="empty">No hay equipos</div></td></tr>
+                <tr><td colSpan={12}><div className="empty">No hay equipos</div></td></tr>
               ) : sorted.map(m => {
                 const dias = dDesde(m.fechaIngreso);
                 const isActive = ESTADOS_ACTIVOS.has(m.estado);
@@ -1527,6 +1611,7 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
                         {dias}d
                       </span>
                     </td>
+                    <td><EntregaEst e={m} /></td>
                     <td>
                       {m.prioridad === "rojo" && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "rgba(239,68,68,.12)", color: "var(--ro)", border: "1px solid rgba(239,68,68,.2)", fontWeight: 700 }}>Alta</span>}
                       {m.prioridad === "amarillo" && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "rgba(245,158,11,.12)", color: "var(--am)", border: "1px solid rgba(245,158,11,.2)", fontWeight: 700 }}>Media</span>}
@@ -1749,6 +1834,12 @@ function KPIsPage({ equipos, gpvList, tecnicos: _tecList, onOpenEquipo }: {
     ? Math.round(scope.reduce((a, e) => a + dDesde(e.fechaIngreso), 0) / scope.length)
     : 0;
 
+  // Cumplimiento de plazos: sobre equipos en proceso con fecha estimada
+  const conPlazo = scope.filter(e => e.fechaEstimada && EN_PROCESO.has(e.estado));
+  const atrasadosScope = conPlazo.filter(e => { const d = diasHasta(e.fechaEstimada); return d !== null && d < 0; });
+  const enPlazo = conPlazo.length - atrasadosScope.length;
+  const cumplimiento = conPlazo.length ? Math.round(enPlazo / conPlazo.length * 100) : null;
+
   const bottlenecks = [...scope]
     .sort((a, b) => dDesde(b.fechaIngreso) - dDesde(a.fechaIngreso))
     .slice(0, 6);
@@ -1871,6 +1962,12 @@ td{padding:7px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top}
         <Card val={scope.length} lbl={`Activos en ${tabLbl}`} color="var(--bl)" />
         <Card val={avgTotal + "d"} lbl="Promedio días en taller" color={avgTotal > 20 ? "var(--ro)" : avgTotal > 10 ? "var(--am)" : "var(--em)"} />
         <Card val={prioRojo} lbl="Prioridad alta (urgentes)" color="var(--ro)" sub={prioRojo > 0 ? "Requieren atención" : "Sin urgentes ✓"} />
+        <Card
+          val={atrasadosScope.length}
+          lbl="Entregas atrasadas"
+          color={atrasadosScope.length > 0 ? "var(--ro)" : "var(--em)"}
+          sub={cumplimiento === null ? "Sin fechas cargadas" : `${cumplimiento}% en plazo (${conPlazo.length})`}
+        />
         {subTab === "general" ? (
           <>
             <Card val={gpvPorVencer} lbl="GPV próximas a vencer" color={gpvPorVencer > 0 ? "var(--am)" : "var(--em)"} sub={`de ${gpvTotal} en cartera`} />
@@ -2666,6 +2763,151 @@ function SaldoCell({ value, editable, onSet }: { value: number; editable: boolea
   );
 }
 
+// ── LicCalendar (disponibilidad mensual) ──────────────────────
+const MESES_ES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+const DIAS_SEM = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+const isoYMD = (y: number, m: number, d: number) =>
+  `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+
+function LicCalendar({ tecnicos, registros }: { tecnicos: string[]; registros: LicMov[] }) {
+  const today = hoyISO();
+  const [ano, mes] = today.split("-").map(Number);
+  const [cur, setCur] = useState<{ y: number; m: number }>({ y: ano, m: mes - 1 });
+  const [selDay, setSelDay] = useState<string | null>(null);
+
+  // licencias con rango (excluye ajustes y sin fechas)
+  const conRango = registros.filter(r => r.tipo !== "ajuste" && r.desde && r.hasta);
+
+  // técnicos de licencia en una fecha dada (un registro por técnico)
+  const enLicEl = (ymd: string): LicMov[] => {
+    const porTec = new Map<string, LicMov>();
+    for (const r of conRango) {
+      if (r.desde! <= ymd && ymd <= r.hasta! && !porTec.has(r.tecnico)) porTec.set(r.tecnico, r);
+    }
+    return [...porTec.values()];
+  };
+
+  // construir grilla del mes (semana Lun-Dom)
+  const primero = new Date(cur.y, cur.m, 1);
+  const offset = (primero.getDay() + 6) % 7; // 0=Lun
+  const diasMes = new Date(cur.y, cur.m + 1, 0).getDate();
+  const celdas: (number | null)[] = [];
+  for (let i = 0; i < offset; i++) celdas.push(null);
+  for (let d = 1; d <= diasMes; d++) celdas.push(d);
+  while (celdas.length % 7 !== 0) celdas.push(null);
+
+  const navMes = (delta: number) => {
+    setSelDay(null);
+    setCur(c => {
+      const nm = c.m + delta;
+      return { y: c.y + Math.floor(nm / 12), m: ((nm % 12) + 12) % 12 };
+    });
+  };
+
+  const detalle = selDay ? enLicEl(selDay) : [];
+  const disponibles = selDay ? tecnicos.filter(t => !detalle.some(r => r.tecnico === t)) : [];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="card" style={{ padding: 14 }}>
+        {/* Encabezado mes */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <Ico n="calendar" s={15} c="var(--bl)" />
+            <span style={{ fontSize: 14, fontWeight: 800, color: "var(--t)" }}>{MESES_ES[cur.m]} {cur.y}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button className="btn btns" onClick={() => navMes(-1)} title="Mes anterior" style={{ padding: "5px 9px" }}>‹</button>
+            <button className="btn btns" onClick={() => { setSelDay(null); setCur({ y: ano, m: mes - 1 }); }} style={{ padding: "5px 10px", fontSize: 12 }}>Hoy</button>
+            <button className="btn btns" onClick={() => navMes(1)} title="Mes siguiente" style={{ padding: "5px 9px" }}>›</button>
+          </div>
+        </div>
+
+        {/* Días de la semana */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 5, marginBottom: 5 }}>
+          {DIAS_SEM.map(d => (
+            <div key={d} style={{ textAlign: "center", fontSize: 10.5, fontWeight: 700, color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".04em" }}>{d}</div>
+          ))}
+        </div>
+
+        {/* Grilla */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 5 }}>
+          {celdas.map((d, i) => {
+            if (d === null) return <div key={i} />;
+            const ymd = isoYMD(cur.y, cur.m, d);
+            const enLic = enLicEl(ymd);
+            const n = enLic.length;
+            const esHoy = ymd === today;
+            const sel = ymd === selDay;
+            const fin = [5, 6].includes((new Date(cur.y, cur.m, d).getDay() + 6) % 7);
+            return (
+              <button
+                key={i}
+                onClick={() => setSelDay(sel ? null : ymd)}
+                style={{
+                  position: "relative", aspectRatio: "1 / 1", minHeight: 46, padding: 5,
+                  display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "flex-start",
+                  border: sel ? "1.5px solid var(--bl)" : esHoy ? "1.5px solid var(--am)" : "1px solid var(--bo)",
+                  borderRadius: "var(--r)", cursor: "pointer", textAlign: "left",
+                  background: sel ? "rgba(59,130,246,.10)" : fin ? "var(--bg3)" : "var(--bg2)",
+                }}
+              >
+                <span style={{ fontSize: 12, fontWeight: esHoy ? 800 : 600, color: esHoy ? "var(--am)" : "var(--t2)" }}>{d}</span>
+                {n > 0 && (
+                  <span style={{
+                    marginTop: "auto", alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "center", gap: 3,
+                    fontSize: 10, fontWeight: 800, padding: "2px 0", borderRadius: 5,
+                    background: n >= 4 ? "rgba(244,63,94,.16)" : n >= 2 ? "rgba(245,158,11,.16)" : "rgba(59,130,246,.14)",
+                    color: n >= 4 ? "var(--ro)" : n >= 2 ? "var(--am)" : "var(--bl)",
+                  }}>{n} fuera</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Leyenda */}
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 12, fontSize: 10.5, color: "var(--t3)" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "rgba(59,130,246,.5)" }} /> 1 técnico fuera</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "rgba(245,158,11,.6)" }} /> 2–3 fuera</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "rgba(244,63,94,.6)" }} /> 4+ fuera</span>
+        </div>
+      </div>
+
+      {/* Detalle del día */}
+      {selDay && (
+        <div className="card" style={{ padding: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12 }}>
+            <Ico n="users" s={15} c="var(--bl)" />
+            <span style={{ fontSize: 13, fontWeight: 800, color: "var(--t)" }}>Detalle del {fmtFecha(selDay)}</span>
+            <span style={{ fontSize: 11, color: "var(--t3)", marginLeft: "auto" }}>{disponibles.length}/{tecnicos.length} disponibles</span>
+          </div>
+          {detalle.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: "var(--em)", display: "flex", alignItems: "center", gap: 6 }}>
+              <Ico n="check" s={14} c="var(--em)" /> Todo el personal disponible este día.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              <div style={{ fontSize: 11.5, color: "var(--t3)" }}>{detalle.length} técnico(s) de licencia:</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {detalle.map(r => (
+                  <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(244,63,94,.07)", border: "1px solid rgba(244,63,94,.25)", borderRadius: "var(--r)", padding: "7px 11px" }}>
+                    <div style={{ width: 24, height: 24, borderRadius: "50%", background: aColor(r.tecnico), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#fff", flexShrink: 0 }}>{inits(r.tecnico)}</div>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t)" }}>{r.tecnico}</div>
+                      <div style={{ fontSize: 10.5, color: "var(--ro)" }}>{licTipoLabel(r)} · {fmtFecha(r.desde)}–{fmtFecha(r.hasta)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── LicenciasPage ─────────────────────────────────────────────
 function LicenciasPage({ tecnicos, licencias, canCreate, canEdit, canDelete, onRegistrar, onSumar, onSetSaldo, onDelete }: {
   tecnicos: string[];
@@ -2678,6 +2920,7 @@ function LicenciasPage({ tecnicos, licencias, canCreate, canEdit, canDelete, onR
   onSetSaldo: (tecnico: string, key: SaldoKey, value: number) => void;
   onDelete: (m: LicMov) => void;
 }) {
+  const [view, setView] = useState<"gestion" | "calendario">("gestion");
   const [fTec, setFTec] = useState("");
   const [fTipo, setFTipo] = useState("");
   const [perPage, setPerPage] = useState(25);
@@ -2702,8 +2945,8 @@ function LicenciasPage({ tecnicos, licencias, canCreate, canEdit, canDelete, onR
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Acciones */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {/* Acciones + cambio de vista */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         {canCreate && (
           <button className="btn btnp" onClick={onRegistrar}>
             <Ico n="plus" s={15} c="#fff" /> Registrar licencia
@@ -2714,8 +2957,24 @@ function LicenciasPage({ tecnicos, licencias, canCreate, canEdit, canDelete, onR
             <Ico n="calendar" s={15} /> Sumar días a saldos
           </button>
         )}
+        <div style={{ marginLeft: "auto", display: "flex", gap: 0, border: "1px solid var(--bo)", borderRadius: "var(--r)", overflow: "hidden" }}>
+          {([["gestion", "Gestión"], ["calendario", "Calendario"]] as const).map(([v, lbl]) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              style={{
+                fontSize: 12, fontWeight: 700, padding: "7px 14px", border: "none", cursor: "pointer",
+                background: view === v ? "var(--bl)" : "transparent",
+                color: view === v ? "#fff" : "var(--t3)",
+              }}
+            >{lbl}</button>
+          ))}
+        </div>
       </div>
 
+      {view === "calendario" && <LicCalendar tecnicos={tecnicos} registros={registros} />}
+
+      {view === "gestion" && (<>
       {/* Disponibilidad hoy */}
       <div className="card" style={{ padding: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
@@ -2878,6 +3137,7 @@ function LicenciasPage({ tecnicos, licencias, canCreate, canEdit, canDelete, onR
           </div>
         )}
       </div>
+      </>)}
     </div>
   );
 }

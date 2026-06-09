@@ -35,7 +35,8 @@ export const GetTallerStateResponse = zod.object({
   "tecnicos": zod.array(zod.string()),
   "observacion": zod.string(),
   "prioridad": zod.string(),
-  "enVentaDesde": zod.string().nullish()
+  "enVentaDesde": zod.string().nullish(),
+  "fechaEstimada": zod.string().nullish()
 })),
   "gpvList": zod.array(zod.object({
   "id": zod.number(),
@@ -90,7 +91,8 @@ export const SaveTallerStateBody = zod.object({
   "tecnicos": zod.array(zod.string()),
   "observacion": zod.string(),
   "prioridad": zod.string(),
-  "enVentaDesde": zod.string().nullish()
+  "enVentaDesde": zod.string().nullish(),
+  "fechaEstimada": zod.string().nullish()
 })),
   "gpvList": zod.array(zod.object({
   "id": zod.number(),
@@ -140,7 +142,8 @@ export const SaveTallerStateResponse = zod.object({
   "tecnicos": zod.array(zod.string()),
   "observacion": zod.string(),
   "prioridad": zod.string(),
-  "enVentaDesde": zod.string().nullish()
+  "enVentaDesde": zod.string().nullish(),
+  "fechaEstimada": zod.string().nullish()
 })),
   "gpvList": zod.array(zod.object({
   "id": zod.number(),

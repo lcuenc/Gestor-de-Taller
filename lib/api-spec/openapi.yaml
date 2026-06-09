@@ -361,6 +361,8 @@ components:
         prioridad:   { type: string }
         enVentaDesde:
           type: ["string", "null"]
+        fechaEstimada:
+          type: ["string", "null"]
       required:
         - id
         - destino
