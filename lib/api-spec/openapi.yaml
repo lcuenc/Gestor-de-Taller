@@ -77,6 +77,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/Conflict"
 
+  /taller/history:
+    get:
+      operationId: getAllHistory
+      tags: [taller]
+      summary: Get full audit history for all equipos
+      responses:
+        "200":
+          description: History entries ordered newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EquipoHistoryEntry"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /taller/equipos/{equipoId}/history:
     get:
       operationId: getEquipoHistory
@@ -352,7 +373,6 @@ components:
         accesorio:   { type: string }
         cliente:     { type: string }
         fechaIngreso: { type: string }
-        falla:       { type: string }
         estado:      { type: string }
         tecnicos:
           type: array
@@ -371,7 +391,6 @@ components:
         - accesorio
         - cliente
         - fechaIngreso
-        - falla
         - estado
         - tecnicos
         - observacion

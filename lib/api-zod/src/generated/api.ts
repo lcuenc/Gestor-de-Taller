@@ -30,7 +30,6 @@ export const GetTallerStateResponse = zod.object({
   "accesorio": zod.string(),
   "cliente": zod.string(),
   "fechaIngreso": zod.string(),
-  "falla": zod.string(),
   "estado": zod.string(),
   "tecnicos": zod.array(zod.string()),
   "observacion": zod.string(),
@@ -86,7 +85,6 @@ export const SaveTallerStateBody = zod.object({
   "accesorio": zod.string(),
   "cliente": zod.string(),
   "fechaIngreso": zod.string(),
-  "falla": zod.string(),
   "estado": zod.string(),
   "tecnicos": zod.array(zod.string()),
   "observacion": zod.string(),
@@ -137,7 +135,6 @@ export const SaveTallerStateResponse = zod.object({
   "accesorio": zod.string(),
   "cliente": zod.string(),
   "fechaIngreso": zod.string(),
-  "falla": zod.string(),
   "estado": zod.string(),
   "tecnicos": zod.array(zod.string()),
   "observacion": zod.string(),
@@ -178,6 +175,21 @@ export const SaveTallerStateResponse = zod.object({
 }),
   "updatedAt": zod.string().nullish()
 })
+
+
+/**
+ * @summary Get full audit history for all equipos
+ */
+export const GetAllHistoryResponseItem = zod.object({
+  "id": zod.number(),
+  "equipoId": zod.number(),
+  "campo": zod.string(),
+  "valorAnterior": zod.string().nullish(),
+  "valorNuevo": zod.string().nullish(),
+  "usuario": zod.string(),
+  "timestamp": zod.string()
+})
+export const GetAllHistoryResponse = zod.array(GetAllHistoryResponseItem)
 
 
 /**

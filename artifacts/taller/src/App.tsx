@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
 import {
@@ -16,6 +16,7 @@ import {
   useUpdateRole,
   useDeleteRole,
   useGetEquipoHistory,
+  useGetAllHistory,
 } from "@workspace/api-client-react";
 import type {
   User,
@@ -110,7 +111,6 @@ interface Equipo {
   accesorio: string;
   cliente: string;
   fechaIngreso: string;
-  falla: string;
   estado: string;
   tecnicos: string[];
   observacion: string;
@@ -221,7 +221,6 @@ const normalizeEquipo = (e: Partial<Equipo>): Equipo => ({
   accesorio: e.accesorio || "",
   cliente: e.cliente || "",
   fechaIngreso: e.fechaIngreso || "",
-  falla: e.falla || "",
   estado: e.estado || "A inspeccionar",
   tecnicos: (e as any).tecnicos || ((e as any).asignado ? [(e as any).asignado] : []),
   observacion: e.observacion || "",
@@ -701,6 +700,52 @@ const CAMPO_COLOR: Record<string, string> = {
   observacion: "#9aa3b8", cliente: "#9aa3b8", modelo: "#9aa3b8", destino: "#9aa3b8",
 };
 
+// ── Time-per-state computation ─────────────────────────────────
+const DAY_MS = 86400000;
+
+// Compute milliseconds spent in each estado for one equipo, using fechaIngreso as
+// the starting point, the estado-change history as transitions, and `nowMs` to
+// close the current (open) segment.
+function tiempoPorEstado(
+  historyEntries: EquipoHistoryEntry[],
+  fechaIngreso: string,
+  estadoActual: string,
+  nowMs: number,
+): Record<string, number> {
+  const changes = historyEntries
+    .filter(h => h.campo === "estado" && h.timestamp)
+    .map(h => ({ t: new Date(h.timestamp).getTime(), from: (h.valorAnterior || "").trim(), to: (h.valorNuevo || "").trim() }))
+    .filter(c => Number.isFinite(c.t))
+    .sort((a, b) => a.t - b.t);
+
+  const startMs = fechaIngreso ? new Date(`${fechaIngreso}T00:00:00`).getTime() : (changes[0]?.t ?? nowMs);
+  const result: Record<string, number> = {};
+
+  let segStart = Number.isFinite(startMs) ? startMs : (changes[0]?.t ?? nowMs);
+  let segState = changes.length ? changes[0].from : estadoActual;
+
+  const add = (state: string, dur: number) => {
+    if (state && dur > 0) result[state] = (result[state] || 0) + dur;
+  };
+
+  for (const c of changes) {
+    add(segState, c.t - segStart);
+    segStart = c.t;
+    segState = c.to;
+  }
+  add(segState || estadoActual, nowMs - segStart);
+
+  return result;
+}
+
+const fmtDur = (ms: number): string => {
+  if (!ms || ms < 0) return "0d";
+  const d = ms / DAY_MS;
+  if (d >= 1) return `${d < 10 ? d.toFixed(1) : Math.round(d)}d`;
+  const h = ms / 3600000;
+  return `${Math.max(1, Math.round(h))}h`;
+};
+
 function HistoryEntry({ entry }: { entry: EquipoHistoryEntry }) {
   const color  = CAMPO_COLOR[entry.campo] || "#9aa3b8";
   const label  = CAMPO_LABELS[entry.campo] || entry.campo;
@@ -761,7 +806,7 @@ function GlobalSearch({ equipos, onOpen }: { equipos: Equipo[]; onOpen: (e: Equi
 
   const results = q.trim().length < 2 ? [] : equipos.filter(e => {
     const ql = q.toLowerCase();
-    return [e.modelo, e.interno, e.cliente, e.falla, e.observacion]
+    return [e.modelo, e.interno, e.cliente, e.observacion]
       .some(f => f?.toLowerCase().includes(ql));
   }).slice(0, 12);
 
@@ -835,7 +880,7 @@ function TallerModal({ item, allEquipos, onSave, onClose, tecnicos, canEdit = tr
   const [form, setForm] = useState<Partial<Equipo>>(item || {
     destino: "alquiler", modelo: "", interno: "", accesorio: "", cliente: "",
     fechaIngreso: new Date().toISOString().slice(0, 10),
-    falla: "", estado: "A inspeccionar", tecnicos: [], observacion: "", prioridad: "ninguna",
+    estado: "A inspeccionar", tecnicos: [], observacion: "", prioridad: "ninguna",
   });
   const set = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }));
   const ocup = buildOcup(allEquipos, item?.id ?? null);
@@ -845,6 +890,15 @@ function TallerModal({ item, allEquipos, onSave, onClose, tecnicos, canEdit = tr
     item?.id ?? 0,
   );
   const history = item ? rawHistory : [];
+
+  const tps = item
+    ? tiempoPorEstado(history as EquipoHistoryEntry[], item.fechaIngreso, item.estado, Date.now())
+    : {};
+  const tpsRows = [...ESTADOS_TALLER, ESTADO_LISTO]
+    .map(s => ({ s, ms: tps[s] || 0, color: ST[s]?.color || "var(--t3)" }))
+    .filter(x => x.ms > 0)
+    .sort((a, b) => b.ms - a.ms);
+  const tpsMax = Math.max(1, ...tpsRows.map(x => x.ms));
 
   return (
     <div className="overlay">
@@ -955,12 +1009,8 @@ function TallerModal({ item, allEquipos, onSave, onClose, tecnicos, canEdit = tr
             </div>
 
             <div className="fg">
-              <label className="fl">Falla / Trabajo</label>
-              <textarea className="fta" value={form.falla || ""} onChange={e => set("falla", e.target.value)} placeholder="Describir falla o trabajo…" />
-            </div>
-            <div className="fg">
               <label className="fl">Observaciones</label>
-              <textarea className="fta" value={form.observacion || ""} onChange={e => set("observacion", e.target.value)} placeholder="Repuestos, estado, notas…" />
+              <textarea className="fta" value={form.observacion || ""} onChange={e => set("observacion", e.target.value)} placeholder="Falla / trabajo, repuestos, estado, notas…" />
             </div>
           </div>
         )}
@@ -972,11 +1022,31 @@ function TallerModal({ item, allEquipos, onSave, onClose, tecnicos, canEdit = tr
             ) : (history as EquipoHistoryEntry[]).length === 0 ? (
               <div className="empty">Sin historial registrado para este equipo.</div>
             ) : (
-              <div className="hist-timeline">
-                {(history as EquipoHistoryEntry[]).map(h => (
-                  <HistoryEntry key={h.id} entry={h} />
-                ))}
-              </div>
+              <>
+                {tpsRows.length > 0 && (
+                  <div style={{ marginBottom: 18 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--t3)", marginBottom: 10 }}>
+                      Tiempo por estado
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {tpsRows.map(({ s, ms, color }) => (
+                        <div key={s} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 110, fontSize: 12, color: "var(--t2)", flexShrink: 0 }}>{s}</div>
+                          <div style={{ flex: 1, height: 8, background: "var(--bg3, #1a1d29)", borderRadius: 4, overflow: "hidden" }}>
+                            <div style={{ width: `${Math.round(ms / tpsMax * 100)}%`, height: "100%", background: color, borderRadius: 4 }} />
+                          </div>
+                          <div style={{ width: 48, textAlign: "right", fontSize: 12, fontWeight: 700, color, flexShrink: 0 }}>{fmtDur(ms)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="hist-timeline">
+                  {(history as EquipoHistoryEntry[]).map(h => (
+                    <HistoryEntry key={h.id} entry={h} />
+                  ))}
+                </div>
+              </>
             )}
           </div>
         )}
@@ -1444,7 +1514,7 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
 
   const fil = equipos.filter(m => {
     const q = search.toLowerCase();
-    const mS = !q || [m.modelo, m.interno, m.accesorio, m.cliente, m.falla, m.observacion, ...(m.tecnicos || [])].some(f => f?.toLowerCase().includes(q));
+    const mS = !q || [m.modelo, m.interno, m.accesorio, m.cliente, m.observacion, ...(m.tecnicos || [])].some(f => f?.toLowerCase().includes(q));
     const mE = ef === "Todos" ? true : ef === "Activos" ? ESTADOS_ACTIVOS.has(m.estado) : m.estado === ef;
     const mD = df === "Todos" || m.destino === df;
     const mT = tf === "Todos" || (m.tecnicos || []).includes(tf);
@@ -1502,7 +1572,6 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
         if (d === null) return "";
         return d < 0 ? `Atrasado ${-d}d` : d === 0 ? "Vence hoy" : `Faltan ${d}d`;
       })(),
-      "Falla / Trabajo": m.falla || "",
       "Observación": m.observacion || "",
     }));
     const ws = XLSX.utils.json_to_sheet(data);
@@ -1563,7 +1632,6 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
                 <th {...thProps("cliente")}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>Cliente <SortIcon col="cliente" sortCol={sortCol} sortDir={sortDir} /></div>
                 </th>
-                <th>Falla</th>
                 <th {...thProps("estado")}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>Estado <SortIcon col="estado" sortCol={sortCol} sortDir={sortDir} /></div>
                 </th>
@@ -1586,7 +1654,7 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
             </thead>
             <tbody>
               {!sorted.length ? (
-                <tr><td colSpan={12}><div className="empty">No hay equipos</div></td></tr>
+                <tr><td colSpan={11}><div className="empty">No hay equipos</div></td></tr>
               ) : sorted.map(m => {
                 const dias = dDesde(m.fechaIngreso);
                 const isActive = ESTADOS_ACTIVOS.has(m.estado);
@@ -1602,7 +1670,6 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
                     </td>
                     <td><DestBadge d={m.destino} /></td>
                     <td style={{ fontSize: 13 }}>{m.cliente || <span style={{ color: "var(--t3)" }}>—</span>}</td>
-                    <td><div style={{ fontSize: 12, color: "var(--t2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{m.falla || "—"}</div></td>
                     <td><StBadge s={m.estado} /></td>
                     <td style={{ minWidth: 120 }}><TecChips tecnicos={m.tecnicos} /></td>
                     <td style={{ fontSize: 11, fontFamily: "monospace", color: "var(--t3)" }}>{m.fechaIngreso}</td>
@@ -1788,13 +1855,16 @@ function MiniBar({ value, max, color }: { value: number; max: number; color: str
 
 type KpiSubTab = "general" | "flota" | "venta";
 
-function KPIsPage({ equipos, gpvList, tecnicos: _tecList, onOpenEquipo }: {
+function KPIsPage({ equipos, gpvList, tecnicos: _tecList, licencias, onOpenEquipo }: {
   equipos: Equipo[];
   gpvList: GPVEntry[];
   tecnicos: string[];
+  licencias: LicenciasState;
   onOpenEquipo: (e: Equipo) => void;
 }) {
   const [subTab, setSubTab] = useState<KpiSubTab>("general");
+  const [reportMonth, setReportMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
+  const { data: allHistory = [] } = useGetAllHistory();
   const allActivos = equipos.filter(e => ESTADOS_ACTIVOS.has(e.estado));
   const scope = subTab === "flota"
     ? allActivos.filter(e => e.destino === "alquiler")
@@ -1854,11 +1924,36 @@ function KPIsPage({ equipos, gpvList, tecnicos: _tecList, onOpenEquipo }: {
   const gpvVencidas   = gpvList.filter(g => g.fechaEntrega && dGPV(g.fechaEntrega) <= 0).length;
   const gpvTotal      = gpvList.length;
 
-  const avgByEstado = [...ESTADOS_TALLER, ESTADO_LISTO].map(s => {
-    const items = scope.filter(e => e.estado === s && e.fechaIngreso);
-    const avg = items.length ? Math.round(items.reduce((a, e) => a + dDesde(e.fechaIngreso), 0) / items.length) : 0;
-    return { s, avg, count: items.length, color: ST[s]?.color || "var(--t3)" };
-  }).filter(x => x.count > 0);
+  // Real time-per-state, aggregated across equipos in scope using estado-change history.
+  const histByEquipo = useMemo(() => {
+    const m: Record<number, EquipoHistoryEntry[]> = {};
+    for (const h of allHistory as EquipoHistoryEntry[]) {
+      (m[h.equipoId] ||= []).push(h);
+    }
+    return m;
+  }, [allHistory]);
+
+  const avgByEstado = useMemo(() => {
+    const now = Date.now();
+    const totals: Record<string, { ms: number; count: number }> = {};
+    for (const e of scope) {
+      if (!e.fechaIngreso) continue;
+      const tps = tiempoPorEstado(histByEquipo[e.id] || [], e.fechaIngreso, e.estado, now);
+      for (const [s, ms] of Object.entries(tps)) {
+        if (ms <= 0) continue;
+        (totals[s] ||= { ms: 0, count: 0 });
+        totals[s].ms += ms;
+        totals[s].count += 1;
+      }
+    }
+    return [...ESTADOS_TALLER, ESTADO_LISTO]
+      .map(s => {
+        const t = totals[s];
+        const avg = t && t.count ? Math.round(t.ms / t.count / DAY_MS) : 0;
+        return { s, avg, count: t?.count ?? 0, color: ST[s]?.color || "var(--t3)" };
+      })
+      .filter(x => x.count > 0);
+  }, [scope, histByEquipo]);
   const maxAvg = Math.max(1, ...avgByEstado.map(x => x.avg));
 
   const Card = ({ val, lbl, color, sub }: { val: number | string; lbl: string; color: string; sub?: string }) => (
@@ -1927,7 +2022,7 @@ td{padding:7px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top}
 </table>
 <div class="side">
   <div>
-    <div class="h2">Tiempo promedio por estado</div>
+    <div class="h2">Tiempo real promedio por estado</div>
     <table><thead><tr><th>Estado</th><th style="text-align:right">Prom.</th><th style="text-align:right">Equipos</th></tr></thead><tbody>${avgByEstRow}</tbody></table>
   </div>
 </div>
@@ -1940,9 +2035,107 @@ td{padding:7px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top}
     if (w) { w.document.write(html); w.document.close(); }
   };
 
+  const downloadMonthlyReport = () => {
+    const [y, m] = reportMonth.split("-").map(Number);
+    if (!y || !m) return;
+    const monthStart = new Date(y, m - 1, 1).getTime();
+    const monthEnd = new Date(y, m, 1).getTime(); // exclusive
+    const inMonth = (iso?: string | null) => {
+      if (!iso) return false;
+      const t = new Date(iso).getTime();
+      return Number.isFinite(t) && t >= monthStart && t < monthEnd;
+    };
+    const monthLabel = new Date(y, m - 1, 1).toLocaleDateString("es-AR", { month: "long", year: "numeric" });
+    const now = new Date();
+    const gen = `${now.toLocaleDateString("es-AR")} ${now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}hs`;
+
+    // Ingresos del mes (por fechaIngreso)
+    const ingresos = equipos.filter(e => inMonth(e.fechaIngreso ? `${e.fechaIngreso}T00:00:00` : null));
+
+    // Salidas/entregas del mes: equipos que dejaron el taller (evento "eliminado" del historial).
+    // El nombre/interno se toma del propio registro (valorAnterior) para no depender del
+    // estado actual, ya que los equipos entregados se quitan del listado.
+    const entregas = (allHistory as EquipoHistoryEntry[])
+      .filter(h => h.campo === "eliminado" && inMonth(h.timestamp))
+      .map(h => ({ desc: (h.valorAnterior || "").trim() || `#${h.equipoId}`, ts: h.timestamp, usuario: h.usuario }));
+
+    // Licencias del mes: registros con rango que se solapan con el mes (excluye ajustes)
+    const licMes = (licencias.registros || []).filter(r =>
+      r.desde && r.hasta && r.tipo !== "ajuste" &&
+      new Date(r.desde).getTime() < monthEnd && new Date(`${r.hasta}T23:59:59`).getTime() >= monthStart,
+    );
+
+    const fmtD = (iso?: string) => iso ? new Date(`${iso}T00:00:00`).toLocaleDateString("es-AR") : "—";
+    const ingresosRows = ingresos.length
+      ? ingresos.map(e => `<tr><td>${e.modelo}</td><td>${e.interno || "—"}</td><td>${e.cliente || "Stock"}</td><td>${e.destino === "venta" ? "Venta" : "Alquiler"}</td><td>${fmtD(e.fechaIngreso)}</td></tr>`).join("")
+      : `<tr><td colspan="5" style="color:#999">Sin ingresos en el mes</td></tr>`;
+    const entregasRows = entregas.length
+      ? entregas.map(x => `<tr><td>${x.desc}</td><td>${new Date(x.ts).toLocaleDateString("es-AR")}</td><td>${x.usuario || "—"}</td></tr>`).join("")
+      : `<tr><td colspan="3" style="color:#999">Sin salidas registradas en el mes</td></tr>`;
+    const licRows = licMes.length
+      ? licMes.map(r => `<tr><td>${r.tecnico}</td><td>${licTipoLabel(r)}</td><td>${fmtD(r.desde)}</td><td>${fmtD(r.hasta)}</td><td style="text-align:right">${r.dias}d</td></tr>`).join("")
+      : `<tr><td colspan="5" style="color:#999">Sin licencias en el mes</td></tr>`;
+
+    const activosAhora = equipos.filter(e => ESTADOS_ACTIVOS.has(e.estado)).length;
+
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+<title>Reporte mensual — ${monthLabel}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;color:#111;background:#fff;padding:36px;font-size:13px}
+h1{font-size:22px;font-weight:800;margin-bottom:3px;text-transform:capitalize}
+.sub{color:#666;font-size:12px;margin-bottom:28px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px}
+.card{border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px}
+.cv{font-size:24px;font-weight:800;line-height:1}
+.cl{font-size:10px;color:#888;margin-top:3px;text-transform:uppercase;letter-spacing:.4px}
+table{width:100%;border-collapse:collapse;margin-bottom:28px}
+th{background:#f9fafb;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#666;border-bottom:2px solid #e5e7eb}
+td{padding:7px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+.h2{font-size:14px;font-weight:700;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #e5e7eb}
+.footer{margin-top:8px;padding-top:14px;border-top:1px solid #e5e7eb;font-size:11px;color:#aaa;display:flex;justify-content:space-between}
+@media print{button{display:none}body{padding:20px}}
+</style></head><body>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+  <div>
+    <h1>Reporte mensual — ${monthLabel}</h1>
+    <div class="sub">Gestión de Activos · Movimiento de Suelo · Generado ${gen}</div>
+  </div>
+  <button onclick="window.print()" style="background:#111;color:#fff;border:none;padding:9px 20px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">Imprimir / Guardar PDF</button>
+</div>
+<div class="grid">
+  <div class="card"><div class="cv">${ingresos.length}</div><div class="cl">Ingresos del mes</div></div>
+  <div class="card"><div class="cv">${entregas.length}</div><div class="cl">Salidas del mes</div></div>
+  <div class="card"><div class="cv">${licMes.length}</div><div class="cl">Licencias del mes</div></div>
+  <div class="card"><div class="cv">${activosAhora}</div><div class="cl">Activos en taller (hoy)</div></div>
+</div>
+<div class="h2">Ingresos del mes (${ingresos.length})</div>
+<table>
+  <thead><tr><th>Modelo</th><th>Interno</th><th>Cliente</th><th>Destino</th><th>Fecha ingreso</th></tr></thead>
+  <tbody>${ingresosRows}</tbody>
+</table>
+<div class="h2">Salidas del taller del mes (${entregas.length})</div>
+<table>
+  <thead><tr><th>Equipo</th><th>Fecha salida</th><th>Registrado por</th></tr></thead>
+  <tbody>${entregasRows}</tbody>
+</table>
+<div class="h2">Licencias del mes (${licMes.length})</div>
+<table>
+  <thead><tr><th>Técnico</th><th>Tipo</th><th>Desde</th><th>Hasta</th><th style="text-align:right">Días</th></tr></thead>
+  <tbody>${licRows}</tbody>
+</table>
+<div class="footer">
+  <span>Gestión de Activos — Movimiento de Suelo</span>
+  <span>Reporte mensual · ${monthLabel} · Generado ${gen}</span>
+</div>
+</body></html>`;
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); }
+  };
+
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 10, flexWrap: "wrap" }}>
         <div className="sub-tab-bar" style={{ marginBottom: 0 }}>
           {(["general", "flota", "venta"] as KpiSubTab[]).map(t => (
             <button key={t} className={`sub-tab${subTab === t ? " active" : ""}`} onClick={() => setSubTab(t)}>
@@ -1950,7 +2143,22 @@ td{padding:7px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top}
             </button>
           ))}
         </div>
-        {subTab !== "general" && (
+        {subTab === "general" ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="month"
+              className="fi"
+              style={{ fontSize: 11, padding: "5px 10px", width: "auto" }}
+              value={reportMonth}
+              max={new Date().toISOString().slice(0, 7)}
+              onChange={e => setReportMonth(e.target.value)}
+            />
+            <button className="btn" style={{ fontSize: 11, padding: "5px 14px", display: "flex", alignItems: "center", gap: 6 }}
+              onClick={downloadMonthlyReport}>
+              <Ico n="save" s={13} c="var(--t2)" />Descargar reporte mensual
+            </button>
+          </div>
+        ) : (
           <button className="btn" style={{ fontSize: 11, padding: "5px 14px", display: "flex", alignItems: "center", gap: 6 }}
             onClick={downloadReport}>
             <Ico n="save" s={13} c="var(--t2)" />Descargar reporte
@@ -2091,7 +2299,7 @@ td{padding:7px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top}
           </div>
         ) : (
           <div className="tw">
-            <div className="th"><Ico n="wrench" s={14} c="var(--te)" /><span className="tt">Promedio días por estado</span></div>
+            <div className="th"><Ico n="wrench" s={14} c="var(--te)" /><span className="tt">Tiempo real por estado</span></div>
             <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: 3 }}>
               {avgByEstado.length === 0 ? <div className="empty">Sin datos</div> : avgByEstado.map(({ s, avg, count, color }) => (
                 <div key={s} className="bar-row">
@@ -2132,7 +2340,7 @@ td{padding:7px 10px;border-bottom:1px solid #f3f4f6;vertical-align:top}
 
       {subTab === "general" && (
         <div className="tw" style={{ marginBottom: 14 }}>
-          <div className="th"><Ico n="wrench" s={14} c="var(--te)" /><span className="tt">Promedio días por estado</span></div>
+          <div className="th"><Ico n="wrench" s={14} c="var(--te)" /><span className="tt">Tiempo real por estado</span></div>
           <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: 3 }}>
             {avgByEstado.length === 0 ? <div className="empty">Sin datos</div> : avgByEstado.map(({ s, avg, count, color }) => (
               <div key={s} className="bar-row">
@@ -3716,7 +3924,7 @@ export default function App() {
 
             <main className="content">
               {tab === "dashboard" && <Dashboard equipos={equipos} gpvList={gpvList} tecnicos={tecnicos} enLicencia={enLicenciaHoy} />}
-              {tab === "kpis" && <KPIsPage equipos={equipos} gpvList={gpvList} tecnicos={tecnicos} onOpenEquipo={m => setModal({ type: "taller", item: m, canEdit: can("taller", "edit") })} />}
+              {tab === "kpis" && <KPIsPage equipos={equipos} gpvList={gpvList} tecnicos={tecnicos} licencias={licencias} onOpenEquipo={m => setModal({ type: "taller", item: m, canEdit: can("taller", "edit") })} />}
               {tab === "layout" && (
                 <LayoutPage
                   equipos={equipos}

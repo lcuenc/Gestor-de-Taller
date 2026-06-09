@@ -17,7 +17,6 @@ export interface Equipo {
   accesorio: string;
   cliente: string;
   fechaIngreso: string;
-  falla: string;
   estado: string;
   tecnicos: string[];
   observacion: string;

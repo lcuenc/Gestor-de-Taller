@@ -1,3 +1,4 @@
 - [Singleton state concurrency](singleton-state-concurrency.md) — taller_state single-row writes: advisory-lock tx, ISO-string stamp compare, canonical jsonb diff for per-section authz.
 - [Generated hook query options](generated-hook-options.md) — orval-generated useXxx hooks require queryKey in query options type; pass raw equipoId=0 instead to rely on built-in enabled:!!(equipoId) guard.
+- [Taller delivery semantics](taller-delivery-semantics.md) — delivered equipos are removed from live list; monthly "salidas" reports must use "eliminado" history events, not the current equipos list.
 - [taller-state read authz](taller-state-read-authz.md) — GET /taller/state intentionally returns ALL sections to any authed user; authz is write-only + client-side tab hiding. Don't "fix" it — availability feature depends on it.

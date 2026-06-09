@@ -276,6 +276,83 @@ export const useSaveTallerState = <TError = ErrorType<Error | Conflict>,
       return useMutation(getSaveTallerStateMutationOptions(options));
     }
 
+export const getGetAllHistoryUrl = () => {
+
+
+
+
+  return `/api/taller/history`
+}
+
+/**
+ * @summary Get full audit history for all equipos
+ */
+export const getAllHistory = async ( options?: RequestInit): Promise<EquipoHistoryEntry[]> => {
+
+  return customFetch<EquipoHistoryEntry[]>(getGetAllHistoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAllHistoryQueryKey = () => {
+    return [
+    `/api/taller/history`
+    ] as const;
+    }
+
+
+export const getGetAllHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getAllHistory>>, TError = ErrorType<Error>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAllHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAllHistoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAllHistory>>> = ({ signal }) => getAllHistory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAllHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAllHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getAllHistory>>>
+export type GetAllHistoryQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Get full audit history for all equipos
+ */
+
+export function useGetAllHistory<TData = Awaited<ReturnType<typeof getAllHistory>>, TError = ErrorType<Error>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAllHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAllHistoryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
 export const getGetEquipoHistoryUrl = (equipoId: number,) => {
 
 

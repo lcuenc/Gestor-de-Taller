@@ -18,7 +18,7 @@ const DEFAULT_TECNICOS = [
 ];
 
 // Fields to track for per-equipo audit history.
-const TRACKED_FIELDS = ["estado", "tecnicos", "prioridad", "falla", "observacion", "cliente", "modelo", "destino"] as const;
+const TRACKED_FIELDS = ["estado", "tecnicos", "prioridad", "observacion", "cliente", "modelo", "destino"] as const;
 type TrackedField = (typeof TRACKED_FIELDS)[number];
 
 type EquipoLike = { id: number; modelo?: string; interno?: string } & Record<TrackedField, unknown>;
@@ -104,6 +104,24 @@ router.get("/taller/state", requireAuth, async (_req, res): Promise<void> => {
     licencias: row.licencias ?? { saldos: {}, registros: [] },
     updatedAt: row.updatedAt?.toISOString() ?? null,
   }));
+});
+
+router.get("/taller/history", requireAuth, async (_req, res): Promise<void> => {
+  const rows = await db
+    .select()
+    .from(equipoHistoryTable)
+    .orderBy(desc(equipoHistoryTable.createdAt))
+    .limit(50000);
+
+  res.json(rows.map(r => ({
+    id: r.id,
+    equipoId: r.equipoId,
+    campo: r.campo,
+    valorAnterior: r.valorAnterior ?? null,
+    valorNuevo: r.valorNuevo ?? null,
+    usuario: r.usuario,
+    timestamp: r.createdAt.toISOString(),
+  })));
 });
 
 router.get("/taller/equipos/:equipoId/history", requireAuth, async (req, res): Promise<void> => {
