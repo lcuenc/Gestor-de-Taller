@@ -17,11 +17,13 @@ import {
   useDeleteRole,
   useGetEquipoHistory,
   useGetAllHistory,
-  getListTodosQueryOptions,
-  useListTodos,
-  useCreateTodo,
-  useUpdateTodo,
-  useDeleteTodo,
+  getGetAgendaQueryOptions,
+  useCreateAgendaProject,
+  useUpdateAgendaProject,
+  useDeleteAgendaProject,
+  useCreateAgendaTask,
+  useUpdateAgendaTask,
+  useDeleteAgendaTask,
 } from "@workspace/api-client-react";
 import type {
   User,
@@ -31,7 +33,10 @@ import type {
   AuthSession,
   TallerState,
   EquipoHistoryEntry,
-  Todo,
+  AgendaData,
+  Project,
+  AgendaTask,
+  AgendaUser,
 } from "@workspace/api-client-react";
 
 // ── Permissions model (mirrors backend MODULES) ────────────────
@@ -271,6 +276,9 @@ const P: Record<string, string> = {
   download:  "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
   list:      "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
   flag:      "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7",
+  folder:    "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z",
+  user:      "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
+  inbox:     "M22 12h-6l-2 3h-4l-2-3H2M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z",
 };
 
 function Ico({ n, s = 16, c = "currentColor" }: { n: string; s?: number; c?: string }) {
@@ -439,6 +447,58 @@ html,body,#root{margin:0;padding:0;width:100%;height:100%;overflow:hidden;backgr
 .app .agenda-ts::-webkit-scrollbar{width:5px}
 .app .agenda-ts::-webkit-scrollbar-thumb{background:var(--bo2);border-radius:99px}
 .app .agenda-ts thead th{position:sticky;top:0;background:var(--bg2);z-index:1}
+.app .agenda-wrap{max-width:1000px}
+.app .agenda-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}
+.app .agenda-title{font-size:19px;font-weight:800;color:var(--t);letter-spacing:-.01em}
+.app .agenda-sub{font-size:12.5px;color:var(--t3);margin-top:2px}
+.app .proj-card{background:var(--bg2);border:1px solid var(--bo);border-radius:var(--r2);overflow:hidden;margin-bottom:14px}
+.app .proj-head{display:flex;align-items:center;gap:9px;padding:11px 14px;border-bottom:1px solid var(--bo)}
+.app .proj-collapse{background:none;border:none;cursor:pointer;display:flex;padding:2px;border-radius:4px}
+.app .proj-collapse:hover{background:rgba(255,255,255,.06)}
+.app .proj-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.app .proj-name{font-size:14px;font-weight:700;color:var(--t);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.app .proj-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;border:1px solid;flex-shrink:0;text-transform:uppercase;letter-spacing:.03em}
+.app .proj-badge.personal{color:var(--t3);border-color:var(--bo2);background:rgba(255,255,255,.03)}
+.app .proj-badge.shared{color:var(--bl);border-color:rgba(59,130,246,.3);background:rgba(59,130,246,.12)}
+.app .proj-owner{font-size:11px;color:var(--t3);font-style:italic;white-space:nowrap}
+.app .proj-count{margin-left:auto;font-size:11px;font-weight:700;color:var(--t2);background:var(--bg3);border:1px solid var(--bo);border-radius:99px;padding:2px 9px;flex-shrink:0}
+.app .proj-actions{display:flex;gap:2px;flex-shrink:0}
+.app .estado-select{border:1px solid;border-radius:99px;padding:3px 9px;font-size:10.5px;font-weight:700;outline:none;cursor:pointer;font-family:inherit;text-transform:uppercase;letter-spacing:.02em}
+.app .estado-select option{background:var(--bg2);color:var(--t);text-transform:none}
+.app .task-text{background:none;border:1px solid transparent;border-radius:6px;padding:5px 8px;font-size:13px;color:var(--t);width:100%;outline:none;font-family:inherit;transition:border-color .12s,background .12s}
+.app .task-text:hover{background:rgba(255,255,255,.03)}
+.app .task-text:focus{border-color:var(--bl);background:var(--bg3)}
+.app .task-done .task-text{color:var(--t3);text-decoration:line-through}
+.app .task-add-row td{border-bottom:none}
+.app .task-add-input::placeholder{color:var(--t3)}
+.app .fecha-cell{position:relative;display:inline-flex;align-items:center;cursor:pointer;font-size:12px;color:var(--t2);border:1px solid var(--bo);border-radius:6px;padding:3px 8px;min-width:48px;justify-content:center}
+.app .fecha-cell:hover{border-color:var(--bo2);background:rgba(255,255,255,.03)}
+.app .fecha-cell.venc{color:var(--ro);border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.1)}
+.app .fecha-cell .fecha-val{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.app .fecha-cell input[type=date]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.app .asg-wrap{position:relative;display:inline-block}
+.app .asg-trigger{background:none;border:1px solid transparent;border-radius:99px;padding:2px 4px;cursor:pointer;display:inline-flex;align-items:center;min-height:26px}
+.app .asg-trigger:hover{background:rgba(255,255,255,.04);border-color:var(--bo)}
+.app .asg-empty{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--t3);padding:0 4px}
+.app .asg-chips{display:inline-flex;align-items:center}
+.app .asg-av{width:22px;height:22px;border-radius:50%;background:var(--bl);color:#fff;font-size:9.5px;font-weight:800;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--bg2);margin-left:-6px}
+.app .asg-av:first-child{margin-left:0}
+.app .asg-av.sm{width:20px;height:20px;margin-left:0;font-size:9px}
+.app .asg-av.asg-more{background:var(--bg4);color:var(--t2)}
+.app .asg-pop{position:absolute;top:calc(100% + 4px);left:0;width:210px;background:var(--bg2);border:1px solid var(--bo2);border-radius:var(--r);box-shadow:0 8px 28px rgba(0,0,0,.5);z-index:600;padding:4px;max-height:240px;overflow-y:auto}
+.app .asg-opt{display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;cursor:pointer;padding:6px 7px;border-radius:6px;text-align:left}
+.app .asg-opt:hover{background:rgba(255,255,255,.05)}
+.app .asg-check{width:14px;display:flex;justify-content:center;flex-shrink:0}
+.app .asg-name{font-size:12.5px;color:var(--t);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.app .asg-opt-empty{font-size:12px;color:var(--t3);padding:10px;text-align:center}
+.app .color-row{display:flex;gap:8px}
+.app .color-dot{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;outline:2px solid transparent;transition:outline-color .12s}
+.app .color-dot.sel{outline-color:var(--t2);outline-offset:2px}
+.app .vis-row{display:flex;gap:8px}
+.app .vis-opt{flex:1;display:flex;align-items:center;gap:9px;padding:10px;border:1px solid var(--bo);border-radius:var(--r);background:var(--bg3);cursor:pointer;text-align:left}
+.app .vis-opt.sel{border-color:var(--bl);background:rgba(59,130,246,.1)}
+.app .vis-t{font-size:13px;font-weight:700;color:var(--t)}
+.app .vis-s{font-size:11px;color:var(--t3)}
 .app .srch-result:hover{background:rgba(255,255,255,.04)}
 .app .gs-wrap{position:relative}
 .app .gs-panel{position:absolute;right:0;top:calc(100% + 6px);width:360px;background:var(--bg2);border:1px solid var(--bo2);border-radius:var(--r2);box-shadow:0 8px 32px rgba(0,0,0,.55);z-index:500;overflow:hidden;max-height:420px;overflow-y:auto}
@@ -2863,182 +2923,421 @@ function PrioBadge({ p }: { p: Prioridad }) {
   );
 }
 
-function AgendaPage({ toast }: { toast: (msg: string, type?: string) => void }) {
-  const qc = useQueryClient();
-  const todosQ = useQuery({ ...getListTodosQueryOptions() });
-  const todos = (todosQ.data ?? []) as Todo[];
-  const { mutate: createTodo, isPending: creating } = useCreateTodo();
-  const { mutate: updateTodo } = useUpdateTodo();
-  const { mutate: deleteTodo } = useDeleteTodo();
-  const inv = () => qc.invalidateQueries({ queryKey: getListTodosQueryOptions().queryKey });
+// ── Agenda (Proyectos y Tareas) ───────────────────────────────
+type Estado = "pendiente" | "en_progreso" | "hecho";
+const ESTADO_META: Record<Estado, { label: string; color: string }> = {
+  pendiente:   { label: "Pendiente",   color: "var(--t3)" },
+  en_progreso: { label: "En progreso", color: "var(--bl)" },
+  hecho:       { label: "Hecho",       color: "var(--em)" },
+};
+const ESTADO_ORDER: Estado[] = ["pendiente", "en_progreso", "hecho"];
 
-  const [text, setText] = useState("");
-  const [newPrio, setNewPrio] = useState<Prioridad>("media");
-  const [editId, setEditId] = useState<number | null>(null);
-  const [editVal, setEditVal] = useState("");
+const PROJECT_COLORS: { id: string; var: string }[] = [
+  { id: "blue",   var: "var(--bl)" },
+  { id: "green",  var: "var(--em)" },
+  { id: "amber",  var: "var(--am)" },
+  { id: "red",    var: "var(--ro)" },
+  { id: "purple", var: "var(--pu)" },
+  { id: "teal",   var: "var(--te)" },
+];
+const projColor = (c: string) => PROJECT_COLORS.find(p => p.id === c)?.var ?? "var(--bl)";
 
-  const add = () => {
-    const t = text.trim();
-    if (!t) return;
-    createTodo({ data: { texto: t, prioridad: newPrio } }, { onSuccess: () => { setText(""); setNewPrio("media"); inv(); }, onError: () => toast("No se pudo agregar la tarea", "err") });
+function fmtFechaCorta(s: string | null | undefined) {
+  if (!s) return "";
+  const [y, m, d] = s.split("-");
+  if (!y || !m || !d) return s;
+  return `${d}/${m}`;
+}
+function isVencida(s: string | null | undefined, estado: Estado) {
+  if (!s || estado === "hecho") return false;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const due = new Date(s + "T00:00:00");
+  return due.getTime() < today.getTime();
+}
+function iniciales(nombre: string, username: string) {
+  const base = (nombre || username || "?").trim();
+  const parts = base.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
+  return base.slice(0, 2).toUpperCase();
+}
+
+function AssigneeCell({ value, usuarios, onChange }: {
+  value: number[];
+  usuarios: AgendaUser[];
+  onChange: (ids: number[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [sel, setSel] = useState<number[]>(value);
+  useEffect(() => { setSel(value); }, [value]);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+  const byId = (id: number) => usuarios.find(u => u.id === id);
+  // Build the next list from local state so rapid toggles don't clobber each other before refetch.
+  const toggle = (id: number) => {
+    setSel(prev => {
+      const next = prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id];
+      onChange(next);
+      return next;
+    });
   };
-  const toggle = (todo: Todo) => updateTodo({ id: todo.id, data: { hecho: !todo.hecho } }, { onSuccess: inv, onError: () => toast("No se pudo actualizar", "err") });
-  const setPrio = (todo: Todo, p: Prioridad) => updateTodo({ id: todo.id, data: { prioridad: p } }, { onSuccess: inv, onError: () => toast("No se pudo actualizar", "err") });
-  const saveEdit = () => {
-    const v = editVal.trim();
-    if (editId === null) return;
-    if (!v) { setEditId(null); return; }
-    updateTodo({ id: editId, data: { texto: v } }, { onSuccess: () => { setEditId(null); inv(); }, onError: () => toast("No se pudo editar", "err") });
-  };
-  const remove = (id: number) => deleteTodo({ id }, { onSuccess: inv, onError: () => toast("No se pudo eliminar", "err") });
-
-  const prioOf = (t: Todo): Prioridad => (PRIO_META[t.prioridad as Prioridad] ? (t.prioridad as Prioridad) : "media");
-  const byPrio = (a: Todo, b: Todo) => PRIO_META[prioOf(a)].rank - PRIO_META[prioOf(b)].rank;
-  const pendientes = todos.filter(t => !t.hecho).sort(byPrio);
-  const hechas = todos.filter(t => t.hecho)
-    .sort((a, b) => new Date(b.completedAt ?? b.updatedAt).getTime() - new Date(a.completedAt ?? a.updatedAt).getTime());
-
-  const row = (t: Todo) => {
-    const p = prioOf(t);
-    return (
-      <tr key={t.id}>
-        <td style={{ width: 1, paddingRight: 0, borderLeft: `3px solid ${t.hecho ? "var(--bo)" : PRIO_META[p].color}` }}>
-          <button
-            className="btni"
-            onClick={() => toggle(t)}
-            title={t.hecho ? "Marcar como pendiente" : "Marcar como hecha"}
-          >
-            <div style={{
-              width: 18, height: 18, borderRadius: 5,
-              border: `1.5px solid ${t.hecho ? "var(--em)" : "var(--bo2)"}`,
-              background: t.hecho ? "var(--em)" : "transparent",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              {t.hecho && <Ico n="check" s={12} c="#fff" />}
-            </div>
-          </button>
-        </td>
-        {editId === t.id ? (
-          <td colSpan={5}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input
-                className="fi"
-                value={editVal}
-                onChange={e => setEditVal(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditId(null); }}
-                style={{ flex: 1 }}
-                autoFocus
-              />
-              <button className="btn btnp" style={{ fontSize: 11, padding: "4px 10px" }} onClick={saveEdit}><Ico n="check" s={12} c="#fff" />Guardar</button>
-              <button className="btni" onClick={() => setEditId(null)}><Ico n="x" s={14} /></button>
-            </div>
-          </td>
+  return (
+    <div className="asg-wrap" ref={ref}>
+      <button className="asg-trigger" type="button" onClick={() => setOpen(o => !o)} title="Asignar a">
+        {sel.length === 0 ? (
+          <span className="asg-empty"><Ico n="user" s={12} c="var(--t3)" />Asignar</span>
         ) : (
-          <>
-            <td>
-              <span style={{
-                fontSize: 13, fontWeight: 500,
-                color: t.hecho ? "var(--t3)" : "var(--t)",
-                textDecoration: t.hecho ? "line-through" : "none",
-                wordBreak: "break-word",
-              }}>{t.texto}</span>
-            </td>
-            <td style={{ whiteSpace: "nowrap" }}>
-              {t.hecho ? (
-                <PrioBadge p={p} />
-              ) : (
-                <select
-                  className="prio-select"
-                  value={p}
-                  onChange={e => setPrio(t, e.target.value as Prioridad)}
-                  title="Cambiar prioridad"
-                  style={{ borderColor: PRIO_META[p].color, color: PRIO_META[p].color }}
-                >
-                  {PRIO_ORDER.map(pr => <option key={pr} value={pr}>{PRIO_META[pr].label}</option>)}
-                </select>
-              )}
-            </td>
-            <td style={{ whiteSpace: "nowrap", fontSize: 12, color: "var(--t3)" }}>{fmtFechaHora(t.createdAt)}</td>
-            <td style={{ whiteSpace: "nowrap", fontSize: 12, color: t.completedAt ? "var(--em)" : "var(--t3)" }}>
-              {t.hecho && t.completedAt ? fmtFechaHora(t.completedAt) : "—"}
-            </td>
-            <td style={{ width: 1, whiteSpace: "nowrap", textAlign: "right" }}>
-              <button className="btni" onClick={() => { setEditId(t.id); setEditVal(t.texto); }} title="Editar"><Ico n="edit" s={14} /></button>
-              <button className="btni" onClick={() => remove(t.id)} title="Eliminar"><Ico n="trash" s={14} c="var(--ro)" /></button>
-            </td>
-          </>
+          <span className="asg-chips">
+            {sel.slice(0, 3).map(id => {
+              const u = byId(id);
+              return <span key={id} className="asg-av" title={u?.nombre || u?.username || ""}>{u ? iniciales(u.nombre, u.username) : "?"}</span>;
+            })}
+            {sel.length > 3 && <span className="asg-av asg-more">+{sel.length - 3}</span>}
+          </span>
         )}
-      </tr>
-    );
-  };
-
-  const sheet = (icon: string, color: string, title: string, items: Todo[], emptyText: string) => (
-    <div className="tw" style={{ marginBottom: 18 }}>
-      <div className="th">
-        <Ico n={icon} s={15} c={color} />
-        <span className="tt">{title}</span>
-        <span className="nb" style={{ marginLeft: "auto" }}>{items.length}</span>
-      </div>
-      {items.length === 0 ? (
-        <div className="empty" style={{ padding: "22px 0" }}>{emptyText}</div>
-      ) : (
-        <div className="ts agenda-ts">
-          <table>
-            <thead>
-              <tr>
-                <th style={{ width: 1 }} aria-label="Estado"></th>
-                <th>Tarea</th>
-                <th>Prioridad</th>
-                <th>Anotada</th>
-                <th>Completada</th>
-                <th style={{ width: 1 }} aria-label="Acciones"></th>
-              </tr>
-            </thead>
-            <tbody>{items.map(row)}</tbody>
-          </table>
+      </button>
+      {open && (
+        <div className="asg-pop">
+          {usuarios.length === 0 ? (
+            <div className="asg-opt-empty">Sin usuarios</div>
+          ) : usuarios.map(u => (
+            <button key={u.id} type="button" className="asg-opt" onClick={() => toggle(u.id)}>
+              <span className="asg-check">{sel.includes(u.id) && <Ico n="check" s={11} c="var(--em)" />}</span>
+              <span className="asg-av sm">{iniciales(u.nombre, u.username)}</span>
+              <span className="asg-name">{u.nombre || u.username}</span>
+            </button>
+          ))}
         </div>
       )}
     </div>
   );
+}
 
+function TaskRow({ task, usuarios, showAssignees, onUpdate, onDelete }: {
+  task: AgendaTask;
+  usuarios: AgendaUser[];
+  showAssignees: boolean;
+  onUpdate: (id: number, data: Partial<AgendaTask>) => void;
+  onDelete: (id: number) => void;
+}) {
+  const [texto, setTexto] = useState(task.texto);
+  useEffect(() => { setTexto(task.texto); }, [task.texto]);
+  const est = (ESTADO_META[task.estado as Estado] ? task.estado : "pendiente") as Estado;
+  const prio = (PRIO_META[task.prioridad as Prioridad] ? task.prioridad : "media") as Prioridad;
+  const done = est === "hecho";
+  const vencida = isVencida(task.fechaLimite, est);
+  const saveTexto = () => { const v = texto.trim(); if (v && v !== task.texto) onUpdate(task.id, { texto: v }); else if (!v) setTexto(task.texto); };
   return (
-    <div style={{ maxWidth: 860 }}>
-      <div className="card" style={{ padding: 16, marginBottom: 18 }}>
-        <div className="fl" style={{ marginBottom: 8 }}>Nueva tarea / nota</div>
-        <div className="agenda-add">
+    <tr className={done ? "task-done" : ""}>
+      <td style={{ width: 1, paddingRight: 0 }}>
+        <select
+          className="estado-select"
+          value={est}
+          onChange={e => onUpdate(task.id, { estado: e.target.value as Estado })}
+          title="Estado"
+          style={{ color: ESTADO_META[est].color, borderColor: ESTADO_META[est].color, background: `color-mix(in srgb, ${ESTADO_META[est].color} 12%, transparent)` }}
+        >
+          {ESTADO_ORDER.map(s => <option key={s} value={s}>{ESTADO_META[s].label}</option>)}
+        </select>
+      </td>
+      <td>
+        <input
+          className="task-text"
+          value={texto}
+          onChange={e => setTexto(e.target.value)}
+          onBlur={saveTexto}
+          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") { setTexto(task.texto); (e.target as HTMLInputElement).blur(); } }}
+        />
+      </td>
+      {showAssignees && (
+        <td style={{ width: 1, whiteSpace: "nowrap" }}>
+          <AssigneeCell value={task.asignados ?? []} usuarios={usuarios} onChange={ids => onUpdate(task.id, { asignados: ids })} />
+        </td>
+      )}
+      <td style={{ width: 1, whiteSpace: "nowrap" }}>
+        <select
+          className="prio-select"
+          value={prio}
+          onChange={e => onUpdate(task.id, { prioridad: e.target.value as Prioridad })}
+          title="Prioridad"
+          style={{ borderColor: PRIO_META[prio].color, color: PRIO_META[prio].color }}
+        >
+          {PRIO_ORDER.map(pr => <option key={pr} value={pr}>{PRIO_META[pr].label}</option>)}
+        </select>
+      </td>
+      <td style={{ width: 1, whiteSpace: "nowrap" }}>
+        <label className={"fecha-cell" + (vencida ? " venc" : "")} title={vencida ? "Vencida" : "Fecha límite"}>
+          {task.fechaLimite ? (
+            <span className="fecha-val">{vencida && <Ico n="alert" s={11} c="var(--ro)" />}{fmtFechaCorta(task.fechaLimite)}</span>
+          ) : (
+            <span className="fecha-empty"><Ico n="calendar" s={12} c="var(--t3)" /></span>
+          )}
           <input
-            className="fi"
-            value={text}
-            onChange={e => setText(e.target.value)}
-            placeholder="Anotá un pendiente y seguilo desde cualquier dispositivo…"
-            onKeyDown={e => { if (e.key === "Enter") add(); }}
-            style={{ flex: 1, minWidth: 160 }}
+            type="date"
+            value={task.fechaLimite ?? ""}
+            onChange={e => onUpdate(task.id, { fechaLimite: e.target.value || null })}
           />
-          <select
-            className="prio-select"
-            value={newPrio}
-            onChange={e => setNewPrio(e.target.value as Prioridad)}
-            title="Prioridad"
-            style={{ borderColor: PRIO_META[newPrio].color, color: PRIO_META[newPrio].color }}
-          >
-            {PRIO_ORDER.map(pr => <option key={pr} value={pr}>Prioridad {PRIO_META[pr].label}</option>)}
-          </select>
-          <button className="btn btnp" onClick={add} disabled={creating || !text.trim()} style={{ flexShrink: 0 }}>
-            <Ico n="plus" s={14} c="#fff" />Agregar
+        </label>
+      </td>
+      <td style={{ width: 1, whiteSpace: "nowrap", textAlign: "right" }}>
+        <button className="btni" onClick={() => onDelete(task.id)} title="Eliminar"><Ico n="trash" s={14} c="var(--ro)" /></button>
+      </td>
+    </tr>
+  );
+}
+
+function TaskTable({ tasks, usuarios, showAssignees, onUpdate, onDelete, onAdd, adding }: {
+  tasks: AgendaTask[];
+  usuarios: AgendaUser[];
+  showAssignees: boolean;
+  onUpdate: (id: number, data: Partial<AgendaTask>) => void;
+  onDelete: (id: number) => void;
+  onAdd: (texto: string) => void;
+  adding: boolean;
+}) {
+  const [nuevo, setNuevo] = useState("");
+  const submitting = useRef(false);
+  const add = () => {
+    const v = nuevo.trim();
+    if (!v || submitting.current) return;
+    submitting.current = true;
+    setNuevo("");
+    onAdd(v);
+    setTimeout(() => { submitting.current = false; }, 0);
+  };
+  const cols = showAssignees ? 6 : 5;
+  return (
+    <div className="ts agenda-ts">
+      <table>
+        <thead>
+          <tr>
+            <th style={{ width: 1 }}>Estado</th>
+            <th>Tarea</th>
+            {showAssignees && <th style={{ width: 1 }}>Asignado a</th>}
+            <th style={{ width: 1 }}>Prioridad</th>
+            <th style={{ width: 1 }}>Fecha</th>
+            <th style={{ width: 1 }} aria-label="Acciones"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {tasks.map(t => (
+            <TaskRow key={t.id} task={t} usuarios={usuarios} showAssignees={showAssignees} onUpdate={onUpdate} onDelete={onDelete} />
+          ))}
+          <tr className="task-add-row">
+            <td style={{ width: 1, paddingRight: 0 }}><Ico n="plus" s={14} c="var(--t3)" /></td>
+            <td colSpan={cols - 1}>
+              <input
+                className="task-text task-add-input"
+                value={nuevo}
+                onChange={e => setNuevo(e.target.value)}
+                placeholder="Nueva tarea…"
+                disabled={adding}
+                onKeyDown={e => { if (e.key === "Enter") add(); }}
+                onBlur={add}
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ProjectModal({ initial, onClose, onSave }: {
+  initial: { nombre: string; compartido: boolean; color: string } | null;
+  onClose: () => void;
+  onSave: (data: { nombre: string; compartido: boolean; color: string }) => void;
+}) {
+  const [nombre, setNombre] = useState(initial?.nombre ?? "");
+  const [compartido, setCompartido] = useState(initial?.compartido ?? false);
+  const [color, setColor] = useState(initial?.color ?? "blue");
+  const editing = initial !== null;
+  const save = () => { const v = nombre.trim(); if (!v) return; onSave({ nombre: v, compartido, color }); };
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
+        <div className="mhd">
+          <span className="mtt">{editing ? "Editar proyecto" : "Nuevo proyecto"}</span>
+          <button className="btni" onClick={onClose}><Ico n="x" s={16} /></button>
+        </div>
+        <div className="mbd">
+          <div className="fg">
+            <label className="fl">Nombre</label>
+            <input className="fi" value={nombre} autoFocus onChange={e => setNombre(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") save(); }} placeholder="Ej. Mantenimiento flota" />
+          </div>
+          <div className="fg">
+            <label className="fl">Color</label>
+            <div className="color-row">
+              {PROJECT_COLORS.map(c => (
+                <button key={c.id} type="button" className={"color-dot" + (color === c.id ? " sel" : "")}
+                  style={{ background: c.var }} onClick={() => setColor(c.id)} title={c.id} />
+              ))}
+            </div>
+          </div>
+          <div className="fg">
+            <label className="fl">Visibilidad</label>
+            <div className="vis-row">
+              <button type="button" className={"vis-opt" + (!compartido ? " sel" : "")} onClick={() => setCompartido(false)}>
+                <Ico n="lock" s={15} c={!compartido ? "var(--bl)" : "var(--t3)"} />
+                <div><div className="vis-t">Personal</div><div className="vis-s">Solo vos lo ves</div></div>
+              </button>
+              <button type="button" className={"vis-opt" + (compartido ? " sel" : "")} onClick={() => setCompartido(true)}>
+                <Ico n="users" s={15} c={compartido ? "var(--bl)" : "var(--t3)"} />
+                <div><div className="vis-t">Compartido</div><div className="vis-s">Todo el equipo colabora</div></div>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="mft">
+          <button className="btn btns" onClick={onClose}>Cancelar</button>
+          <button className="btn btnp" onClick={save} disabled={!nombre.trim()}>
+            <Ico n="check" s={14} c="#fff" />{editing ? "Guardar" : "Crear proyecto"}
           </button>
         </div>
       </div>
+    </div>
+  );
+}
 
-      {todosQ.isLoading ? (
+function AgendaPage({ toast, currentUserId }: { toast: (msg: string, type?: string) => void; currentUserId: number | null }) {
+  const qc = useQueryClient();
+  const agendaQ = useQuery({ ...getGetAgendaQueryOptions() });
+  const data = agendaQ.data as AgendaData | undefined;
+  const projects = data?.projects ?? [];
+  const tasks = data?.tasks ?? [];
+  const usuarios = data?.usuarios ?? [];
+
+  const { mutate: createProject, isPending: creatingProject } = useCreateAgendaProject();
+  const { mutate: updateProject } = useUpdateAgendaProject();
+  const { mutate: deleteProject } = useDeleteAgendaProject();
+  const { mutate: createTask, isPending: creatingTask } = useCreateAgendaTask();
+  const { mutate: updateTask } = useUpdateAgendaTask();
+  const { mutate: deleteTask } = useDeleteAgendaTask();
+  const inv = () => qc.invalidateQueries({ queryKey: getGetAgendaQueryOptions().queryKey });
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editProject, setEditProject] = useState<Project | null>(null);
+  const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
+
+  const onUpdateTask = (id: number, d: Partial<AgendaTask>) =>
+    updateTask({ id, data: d as never }, { onSuccess: inv, onError: () => toast("No se pudo actualizar la tarea", "err") });
+  const onDeleteTask = (id: number) =>
+    deleteTask({ id }, { onSuccess: inv, onError: () => toast("No se pudo eliminar la tarea", "err") });
+  const onAddTask = (projectId: number | null, texto: string) =>
+    createTask({ data: { texto, projectId } }, { onSuccess: inv, onError: () => toast("No se pudo crear la tarea", "err") });
+
+  const saveProject = (d: { nombre: string; compartido: boolean; color: string }) => {
+    if (editProject) {
+      updateProject({ id: editProject.id, data: d }, { onSuccess: () => { setModalOpen(false); setEditProject(null); inv(); }, onError: () => toast("No se pudo guardar el proyecto", "err") });
+    } else {
+      createProject({ data: d }, { onSuccess: () => { setModalOpen(false); inv(); }, onError: () => toast("No se pudo crear el proyecto", "err") });
+    }
+  };
+  const removeProject = (p: Project) => {
+    if (!window.confirm(`¿Eliminar el proyecto "${p.nombre}" y todas sus tareas?`)) return;
+    deleteProject({ id: p.id }, { onSuccess: inv, onError: () => toast("No se pudo eliminar el proyecto", "err") });
+  };
+
+  const tasksOf = (pid: number | null) => tasks.filter(t => (t.projectId ?? null) === pid);
+  const generales = tasksOf(null);
+  const sortedProjects = [...projects].sort((a, b) =>
+    (a.compartido === b.compartido ? a.orden - b.orden || a.id - b.id : a.compartido ? 1 : -1));
+
+  return (
+    <div className="agenda-wrap">
+      <div className="agenda-head">
+        <div>
+          <div className="agenda-title">Proyectos y Tareas</div>
+          <div className="agenda-sub">Organizá el trabajo en proyectos personales y compartidos del equipo.</div>
+        </div>
+        <button className="btn btnp" onClick={() => { setEditProject(null); setModalOpen(true); }}>
+          <Ico n="plus" s={14} c="#fff" />Nuevo proyecto
+        </button>
+      </div>
+
+      {agendaQ.isLoading ? (
         <div className="empty">Cargando…</div>
-      ) : todos.length === 0 ? (
-        <div className="empty">No tenés tareas anotadas todavía.</div>
       ) : (
         <>
-          {sheet("list", "var(--am)", "Pendientes", pendientes, "Sin pendientes")}
-          {hechas.length > 0 && sheet("check", "var(--em)", "Completadas", hechas, "Sin tareas completadas")}
+          {sortedProjects.map(p => {
+            const pt = tasksOf(p.id);
+            const done = pt.filter(t => t.estado === "hecho").length;
+            const isOwner = currentUserId !== null && p.ownerId === currentUserId;
+            const col = collapsed[p.id];
+            return (
+              <div className="proj-card" key={p.id} style={{ borderLeft: `3px solid ${projColor(p.color)}` }}>
+                <div className="proj-head">
+                  <button className="proj-collapse" onClick={() => setCollapsed(c => ({ ...c, [p.id]: !c[p.id] }))} title={col ? "Expandir" : "Contraer"}>
+                    <Ico n={col ? "chevR" : "chevL"} s={14} c="var(--t3)" />
+                  </button>
+                  <span className="proj-dot" style={{ background: projColor(p.color) }} />
+                  <span className="proj-name">{p.nombre}</span>
+                  <span className={"proj-badge " + (p.compartido ? "shared" : "personal")}>
+                    <Ico n={p.compartido ? "users" : "lock"} s={11} c="currentColor" />
+                    {p.compartido ? "Compartido" : "Personal"}
+                  </span>
+                  {p.compartido && !isOwner && <span className="proj-owner">de {p.ownerNombre}</span>}
+                  <span className="proj-count">{done}/{pt.length}</span>
+                  {isOwner && (
+                    <span className="proj-actions">
+                      <button className="btni" onClick={() => { setEditProject(p); setModalOpen(true); }} title="Editar proyecto"><Ico n="edit" s={14} /></button>
+                      <button className="btni" onClick={() => removeProject(p)} title="Eliminar proyecto"><Ico n="trash" s={14} c="var(--ro)" /></button>
+                    </span>
+                  )}
+                </div>
+                {!col && (
+                  <TaskTable
+                    tasks={pt}
+                    usuarios={usuarios}
+                    showAssignees={p.compartido}
+                    onUpdate={onUpdateTask}
+                    onDelete={onDeleteTask}
+                    onAdd={texto => onAddTask(p.id, texto)}
+                    adding={creatingTask}
+                  />
+                )}
+              </div>
+            );
+          })}
+
+          <div className="proj-card" style={{ borderLeft: "3px solid var(--t3)" }}>
+            <div className="proj-head">
+              <span className="proj-collapse" style={{ visibility: "hidden" }}><Ico n="chevL" s={14} /></span>
+              <Ico n="inbox" s={15} c="var(--t2)" />
+              <span className="proj-name">Tareas generales</span>
+              <span className="proj-badge personal"><Ico n="lock" s={11} c="currentColor" />Personal</span>
+              <span className="proj-count">{generales.filter(t => t.estado === "hecho").length}/{generales.length}</span>
+            </div>
+            <TaskTable
+              tasks={generales}
+              usuarios={usuarios}
+              showAssignees={false}
+              onUpdate={onUpdateTask}
+              onDelete={onDeleteTask}
+              onAdd={texto => onAddTask(null, texto)}
+              adding={creatingTask}
+            />
+          </div>
+
+          {sortedProjects.length === 0 && generales.length === 0 && (
+            <div className="empty" style={{ marginTop: 8 }}>Todavía no hay tareas. Creá un proyecto o agregá una tarea general.</div>
+          )}
         </>
       )}
+
+      {modalOpen && (
+        <ProjectModal
+          initial={editProject ? { nombre: editProject.nombre, compartido: editProject.compartido, color: editProject.color } : null}
+          onClose={() => { setModalOpen(false); setEditProject(null); }}
+          onSave={saveProject}
+        />
+      )}
+      {creatingProject && null}
     </div>
   );
 }
@@ -4258,7 +4557,7 @@ export default function App() {
                   onDelete={m => setLicDel(m)}
                 />
               )}
-              {tab === "agenda" && <AgendaPage toast={toast} />}
+              {tab === "agenda" && <AgendaPage toast={toast} currentUserId={currentUser?.id ?? null} />}
               {tab === "admin" && <AdminPage can={can} toast={toast} currentUserId={currentUser?.id ?? null} tecnicos={tecnicos} onSaveTecnicos={saveTecnicos} />}
               <Toasts toasts={toasts} />
             </main>

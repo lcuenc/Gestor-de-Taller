@@ -102,54 +102,129 @@ export interface EquipoHistoryEntry {
   timestamp: string;
 }
 
-export type TodoPrioridad = typeof TodoPrioridad[keyof typeof TodoPrioridad];
+export interface AgendaUser {
+  id: number;
+  username: string;
+  nombre: string;
+}
+
+export interface Project {
+  id: number;
+  nombre: string;
+  compartido: boolean;
+  ownerId: number;
+  ownerNombre: string;
+  color: string;
+  orden: number;
+  createdAt: string;
+}
+
+export interface ProjectInput {
+  /** @minLength 1 */
+  nombre: string;
+  compartido?: boolean;
+  color?: string;
+}
+
+export interface ProjectUpdate {
+  /** @minLength 1 */
+  nombre?: string;
+  compartido?: boolean;
+  color?: string;
+}
+
+export type AgendaTaskEstado = typeof AgendaTaskEstado[keyof typeof AgendaTaskEstado];
 
 
-export const TodoPrioridad = {
+export const AgendaTaskEstado = {
+  pendiente: 'pendiente',
+  en_progreso: 'en_progreso',
+  hecho: 'hecho',
+} as const;
+
+export type AgendaTaskPrioridad = typeof AgendaTaskPrioridad[keyof typeof AgendaTaskPrioridad];
+
+
+export const AgendaTaskPrioridad = {
   alta: 'alta',
   media: 'media',
   baja: 'baja',
 } as const;
 
-export interface Todo {
+export interface AgendaTask {
   id: number;
+  projectId: number | null;
+  ownerId: number;
   texto: string;
-  hecho: boolean;
-  prioridad: TodoPrioridad;
-  createdAt: string;
+  estado: AgendaTaskEstado;
+  prioridad: AgendaTaskPrioridad;
+  fechaLimite: string | null;
+  asignados: number[];
   completedAt: string | null;
+  createdAt: string;
   updatedAt: string;
 }
 
-export type TodoInputPrioridad = typeof TodoInputPrioridad[keyof typeof TodoInputPrioridad];
+export type AgendaTaskInputEstado = typeof AgendaTaskInputEstado[keyof typeof AgendaTaskInputEstado];
 
 
-export const TodoInputPrioridad = {
+export const AgendaTaskInputEstado = {
+  pendiente: 'pendiente',
+  en_progreso: 'en_progreso',
+  hecho: 'hecho',
+} as const;
+
+export type AgendaTaskInputPrioridad = typeof AgendaTaskInputPrioridad[keyof typeof AgendaTaskInputPrioridad];
+
+
+export const AgendaTaskInputPrioridad = {
   alta: 'alta',
   media: 'media',
   baja: 'baja',
 } as const;
 
-export interface TodoInput {
+export interface AgendaTaskInput {
+  projectId?: number | null;
   /** @minLength 1 */
   texto: string;
-  prioridad?: TodoInputPrioridad;
+  estado?: AgendaTaskInputEstado;
+  prioridad?: AgendaTaskInputPrioridad;
+  fechaLimite?: string | null;
+  asignados?: number[];
 }
 
-export type TodoUpdatePrioridad = typeof TodoUpdatePrioridad[keyof typeof TodoUpdatePrioridad];
+export type AgendaTaskUpdateEstado = typeof AgendaTaskUpdateEstado[keyof typeof AgendaTaskUpdateEstado];
 
 
-export const TodoUpdatePrioridad = {
+export const AgendaTaskUpdateEstado = {
+  pendiente: 'pendiente',
+  en_progreso: 'en_progreso',
+  hecho: 'hecho',
+} as const;
+
+export type AgendaTaskUpdatePrioridad = typeof AgendaTaskUpdatePrioridad[keyof typeof AgendaTaskUpdatePrioridad];
+
+
+export const AgendaTaskUpdatePrioridad = {
   alta: 'alta',
   media: 'media',
   baja: 'baja',
 } as const;
 
-export interface TodoUpdate {
+export interface AgendaTaskUpdate {
+  projectId?: number | null;
   /** @minLength 1 */
   texto?: string;
-  hecho?: boolean;
-  prioridad?: TodoUpdatePrioridad;
+  estado?: AgendaTaskUpdateEstado;
+  prioridad?: AgendaTaskUpdatePrioridad;
+  fechaLimite?: string | null;
+  asignados?: number[];
+}
+
+export interface AgendaData {
+  projects: Project[];
+  tasks: AgendaTask[];
+  usuarios: AgendaUser[];
 }
 
 export interface Error {

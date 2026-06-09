@@ -215,67 +215,151 @@ export const GetEquipoHistoryResponse = zod.array(GetEquipoHistoryResponseItem)
 
 
 /**
- * @summary List the current user's todos
+ * @summary Get projects and tasks visible to the current user, plus the user roster
  */
-export const ListTodosResponseItem = zod.object({
+export const GetAgendaResponse = zod.object({
+  "projects": zod.array(zod.object({
   "id": zod.number(),
+  "nombre": zod.string(),
+  "compartido": zod.boolean(),
+  "ownerId": zod.number(),
+  "ownerNombre": zod.string(),
+  "color": zod.string(),
+  "orden": zod.number(),
+  "createdAt": zod.string()
+})),
+  "tasks": zod.array(zod.object({
+  "id": zod.number(),
+  "projectId": zod.number().nullable(),
+  "ownerId": zod.number(),
   "texto": zod.string(),
-  "hecho": zod.boolean(),
+  "estado": zod.enum(['pendiente', 'en_progreso', 'hecho']),
   "prioridad": zod.enum(['alta', 'media', 'baja']),
-  "createdAt": zod.string(),
+  "fechaLimite": zod.string().nullable(),
+  "asignados": zod.array(zod.number()),
   "completedAt": zod.string().nullable(),
+  "createdAt": zod.string(),
   "updatedAt": zod.string()
+})),
+  "usuarios": zod.array(zod.object({
+  "id": zod.number(),
+  "username": zod.string(),
+  "nombre": zod.string()
+}))
 })
-export const ListTodosResponse = zod.array(ListTodosResponseItem)
 
 
 /**
- * @summary Create a todo for the current user
+ * @summary Create a project
  */
 
 
 
-export const CreateTodoBody = zod.object({
+export const CreateAgendaProjectBody = zod.object({
+  "nombre": zod.string().min(1),
+  "compartido": zod.boolean().optional(),
+  "color": zod.string().optional()
+})
+
+
+/**
+ * @summary Update a project (owner only)
+ */
+export const UpdateAgendaProjectParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const UpdateAgendaProjectBody = zod.object({
+  "nombre": zod.string().min(1).optional(),
+  "compartido": zod.boolean().optional(),
+  "color": zod.string().optional()
+})
+
+export const UpdateAgendaProjectResponse = zod.object({
+  "id": zod.number(),
+  "nombre": zod.string(),
+  "compartido": zod.boolean(),
+  "ownerId": zod.number(),
+  "ownerNombre": zod.string(),
+  "color": zod.string(),
+  "orden": zod.number(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a project and its tasks (owner only)
+ */
+export const DeleteAgendaProjectParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteAgendaProjectResponse = zod.object({
+  "status": zod.string()
+})
+
+
+/**
+ * @summary Create a task
+ */
+
+
+
+export const CreateAgendaTaskBody = zod.object({
+  "projectId": zod.number().nullish(),
   "texto": zod.string().min(1),
-  "prioridad": zod.enum(['alta', 'media', 'baja']).optional()
+  "estado": zod.enum(['pendiente', 'en_progreso', 'hecho']).optional(),
+  "prioridad": zod.enum(['alta', 'media', 'baja']).optional(),
+  "fechaLimite": zod.string().nullish(),
+  "asignados": zod.array(zod.number()).optional()
 })
 
 
 /**
- * @summary Update one of the current user's todos
+ * @summary Update a task
  */
-export const UpdateTodoParams = zod.object({
+export const UpdateAgendaTaskParams = zod.object({
   "id": zod.coerce.number()
 })
 
 
 
 
-export const UpdateTodoBody = zod.object({
+export const UpdateAgendaTaskBody = zod.object({
+  "projectId": zod.number().nullish(),
   "texto": zod.string().min(1).optional(),
-  "hecho": zod.boolean().optional(),
-  "prioridad": zod.enum(['alta', 'media', 'baja']).optional()
+  "estado": zod.enum(['pendiente', 'en_progreso', 'hecho']).optional(),
+  "prioridad": zod.enum(['alta', 'media', 'baja']).optional(),
+  "fechaLimite": zod.string().nullish(),
+  "asignados": zod.array(zod.number()).optional()
 })
 
-export const UpdateTodoResponse = zod.object({
+export const UpdateAgendaTaskResponse = zod.object({
   "id": zod.number(),
+  "projectId": zod.number().nullable(),
+  "ownerId": zod.number(),
   "texto": zod.string(),
-  "hecho": zod.boolean(),
+  "estado": zod.enum(['pendiente', 'en_progreso', 'hecho']),
   "prioridad": zod.enum(['alta', 'media', 'baja']),
-  "createdAt": zod.string(),
+  "fechaLimite": zod.string().nullable(),
+  "asignados": zod.array(zod.number()),
   "completedAt": zod.string().nullable(),
+  "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
 
 
 /**
- * @summary Delete one of the current user's todos
+ * @summary Delete a task
  */
-export const DeleteTodoParams = zod.object({
+export const DeleteAgendaTaskParams = zod.object({
   "id": zod.coerce.number()
 })
 
-export const DeleteTodoResponse = zod.object({
+export const DeleteAgendaTaskResponse = zod.object({
   "status": zod.string()
 })
 

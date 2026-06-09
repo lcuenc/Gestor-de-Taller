@@ -4,7 +4,7 @@ import tallerRouter from "./taller";
 import authRouter from "./auth";
 import usersRouter from "./users";
 import rolesRouter from "./roles";
-import todosRouter from "./todos";
+import agendaRouter from "./agenda";
 
 const router: IRouter = Router();
 
@@ -13,6 +13,6 @@ router.use(authRouter);
 router.use(usersRouter);
 router.use(rolesRouter);
 router.use(tallerRouter);
-router.use(todosRouter);
+router.use(agendaRouter);
 
 export default router;

@@ -21,3 +21,4 @@ export * from "./taller";
 export * from "./auth";
 export * from "./session";
 export * from "./todos";
+export * from "./agenda";

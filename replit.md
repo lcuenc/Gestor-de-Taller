@@ -30,7 +30,9 @@ _Populate as you build — non-obvious choices a reader couldn't infer from the 
 
 ## Product
 
-Workshop asset-management / supervision tool ("Gestión de Activos — Movimiento de Suelo"). Modules: Dashboard, Taller (repairs), Venta/GPV, KPIs, Layout, Licencias, a personal Agenda (per-user to-do/notas), and Administración (users, roles, permissions, and técnico management). Most data is a shared singleton; the Agenda is the only per-user data. Técnico management is admin-only (a subtab inside Administración). The Agenda module is available to every authenticated user regardless of role permissions.
+Workshop asset-management / supervision tool ("Gestión de Activos — Movimiento de Suelo"). Modules: Dashboard, Taller (repairs), Venta/GPV, KPIs, Layout, Licencias, an Agenda ("Proyectos y Tareas"), and Administración (users, roles, permissions, and técnico management). Most data is a shared singleton; the Agenda is the only non-singleton data. Técnico management is admin-only (a subtab inside Administración). The Agenda module is available to every authenticated user regardless of role permissions.
+
+The Agenda is a Notion-style project + task system: personal projects (owner-only), shared projects (all authed users collaborate on tasks; only the owner renames/deletes the project), and general tasks (no project, personal). Task fields: Estado (pendiente/en_progreso/hecho), Prioridad (alta/media/baja), Fecha límite, and multi-assignee ("Asignado a") which persists only on shared-project tasks (enforced server-side). Legacy per-user todos are migrated into general tasks once at startup.
 
 ## User preferences
 

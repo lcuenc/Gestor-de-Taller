@@ -18,6 +18,8 @@ tags:
     description: User management operations
   - name: roles
     description: Role and permission management operations
+  - name: agenda
+    description: Projects and tasks (agenda) operations
 paths:
   /healthz:
     get:
@@ -124,43 +126,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /todos:
+  /agenda:
     get:
-      operationId: listTodos
-      tags: [todos]
-      summary: List the current user's todos
+      operationId: getAgenda
+      tags: [agenda]
+      summary: Get projects and tasks visible to the current user, plus the user roster
       responses:
         "200":
-          description: Todos ordered newest first
+          description: Agenda data
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Todo"
-        "401":
-          description: Not authenticated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-    post:
-      operationId: createTodo
-      tags: [todos]
-      summary: Create a todo for the current user
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/TodoInput"
-      responses:
-        "201":
-          description: Created todo
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Todo"
+                $ref: "#/components/schemas/AgendaData"
         "401":
           description: Not authenticated
           content:
@@ -168,11 +145,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /todos/{id}:
+  /agenda/projects:
+    post:
+      operationId: createAgendaProject
+      tags: [agenda]
+      summary: Create a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Created project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /agenda/projects/{id}:
     patch:
-      operationId: updateTodo
-      tags: [todos]
-      summary: Update one of the current user's todos
+      operationId: updateAgendaProject
+      tags: [agenda]
+      summary: Update a project (owner only)
       parameters:
         - name: id
           in: path
@@ -183,16 +185,22 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/TodoUpdate"
+              $ref: "#/components/schemas/ProjectUpdate"
       responses:
         "200":
-          description: Updated todo
+          description: Updated project
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Todo"
+                $ref: "#/components/schemas/Project"
         "401":
           description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden
           content:
             application/json:
               schema:
@@ -204,9 +212,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
     delete:
-      operationId: deleteTodo
-      tags: [todos]
-      summary: Delete one of the current user's todos
+      operationId: deleteAgendaProject
+      tags: [agenda]
+      summary: Delete a project and its tasks (owner only)
       parameters:
         - name: id
           in: path
@@ -221,6 +229,119 @@ paths:
                 $ref: "#/components/schemas/HealthStatus"
         "401":
           description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /agenda/tasks:
+    post:
+      operationId: createAgendaTask
+      tags: [agenda]
+      summary: Create a task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgendaTaskInput"
+      responses:
+        "201":
+          description: Created task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgendaTask"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /agenda/tasks/{id}:
+    patch:
+      operationId: updateAgendaTask
+      tags: [agenda]
+      summary: Update a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: number }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgendaTaskUpdate"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgendaTask"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteAgendaTask
+      tags: [agenda]
+      summary: Delete a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: number }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden
           content:
             application/json:
               schema:
@@ -645,39 +766,113 @@ components:
         - usuario
         - timestamp
 
-    Todo:
+    AgendaUser:
+      type: object
+      properties:
+        id:       { type: number }
+        username: { type: string }
+        nombre:   { type: string }
+      required:
+        - id
+        - username
+        - nombre
+
+    Project:
+      type: object
+      properties:
+        id:         { type: number }
+        nombre:     { type: string }
+        compartido: { type: boolean }
+        ownerId:    { type: number }
+        ownerNombre: { type: string }
+        color:      { type: string }
+        orden:      { type: number }
+        createdAt:  { type: string }
+      required:
+        - id
+        - nombre
+        - compartido
+        - ownerId
+        - ownerNombre
+        - color
+        - orden
+        - createdAt
+
+    ProjectInput:
+      type: object
+      properties:
+        nombre:     { type: string, minLength: 1 }
+        compartido: { type: boolean }
+        color:      { type: string }
+      required:
+        - nombre
+
+    ProjectUpdate:
+      type: object
+      properties:
+        nombre:     { type: string, minLength: 1 }
+        compartido: { type: boolean }
+        color:      { type: string }
+
+    AgendaTask:
       type: object
       properties:
         id:          { type: number }
+        projectId:   { type: number, nullable: true }
+        ownerId:     { type: number }
         texto:       { type: string }
-        hecho:       { type: boolean }
+        estado:      { type: string, enum: [pendiente, en_progreso, hecho] }
         prioridad:   { type: string, enum: [alta, media, baja] }
-        createdAt:   { type: string }
+        fechaLimite: { type: string, nullable: true }
+        asignados:   { type: array, items: { type: number } }
         completedAt: { type: string, nullable: true }
+        createdAt:   { type: string }
         updatedAt:   { type: string }
       required:
         - id
+        - projectId
+        - ownerId
         - texto
-        - hecho
+        - estado
         - prioridad
-        - createdAt
+        - fechaLimite
+        - asignados
         - completedAt
+        - createdAt
         - updatedAt
 
-    TodoInput:
+    AgendaTaskInput:
       type: object
       properties:
-        texto:     { type: string, minLength: 1 }
-        prioridad: { type: string, enum: [alta, media, baja] }
+        projectId:   { type: number, nullable: true }
+        texto:       { type: string, minLength: 1 }
+        estado:      { type: string, enum: [pendiente, en_progreso, hecho] }
+        prioridad:   { type: string, enum: [alta, media, baja] }
+        fechaLimite: { type: string, nullable: true }
+        asignados:   { type: array, items: { type: number } }
       required:
         - texto
 
-    TodoUpdate:
+    AgendaTaskUpdate:
       type: object
       properties:
-        texto:     { type: string, minLength: 1 }
-        hecho:     { type: boolean }
-        prioridad: { type: string, enum: [alta, media, baja] }
+        projectId:   { type: number, nullable: true }
+        texto:       { type: string, minLength: 1 }
+        estado:      { type: string, enum: [pendiente, en_progreso, hecho] }
+        prioridad:   { type: string, enum: [alta, media, baja] }
+        fechaLimite: { type: string, nullable: true }
+        asignados:   { type: array, items: { type: number } }
+
+    AgendaData:
+      type: object
+      properties:
+        projects: { type: array, items: { $ref: "#/components/schemas/Project" } }
+        tasks:    { type: array, items: { $ref: "#/components/schemas/AgendaTask" } }
+        usuarios: { type: array, items: { $ref: "#/components/schemas/AgendaUser" } }
+      required:
+        - projects
+        - tasks
+        - usuarios
 
     Error:
       type: object

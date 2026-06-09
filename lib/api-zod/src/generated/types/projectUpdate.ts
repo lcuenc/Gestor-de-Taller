@@ -5,10 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { TodoInputPrioridad } from './todoInputPrioridad';
 
-export interface TodoInput {
+export interface ProjectUpdate {
   /** @minLength 1 */
-  texto: string;
-  prioridad?: TodoInputPrioridad;
+  nombre?: string;
+  compartido?: boolean;
+  color?: string;
 }

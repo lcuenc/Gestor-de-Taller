@@ -6,6 +6,17 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './agendaData';
+export * from './agendaTask';
+export * from './agendaTaskEstado';
+export * from './agendaTaskInput';
+export * from './agendaTaskInputEstado';
+export * from './agendaTaskInputPrioridad';
+export * from './agendaTaskPrioridad';
+export * from './agendaTaskUpdate';
+export * from './agendaTaskUpdateEstado';
+export * from './agendaTaskUpdatePrioridad';
+export * from './agendaUser';
 export * from './authSession';
 export * from './conflict';
 export * from './equipo';
@@ -18,6 +29,9 @@ export * from './licencias';
 export * from './licenciasSaldos';
 export * from './loginInput';
 export * from './modulePermission';
+export * from './project';
+export * from './projectInput';
+export * from './projectUpdate';
 export * from './role';
 export * from './roleInput';
 export * from './roleInputPermissions';
@@ -28,12 +42,6 @@ export * from './tallerState';
 export * from './tallerStateInput';
 export * from './tallerStateInputLayout';
 export * from './tallerStateLayout';
-export * from './todo';
-export * from './todoInput';
-export * from './todoInputPrioridad';
-export * from './todoPrioridad';
-export * from './todoUpdate';
-export * from './todoUpdatePrioridad';
 export * from './user';
 export * from './userInput';
 export * from './userUpdate';

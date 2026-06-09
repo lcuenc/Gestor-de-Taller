@@ -1,31 +1,45 @@
 ---
-name: Personal agenda / todos module
-description: How the per-user to-do module is scoped and why "agenda" bypasses the role-permission system
+name: Agenda — Proyectos y Tareas module
+description: Durable scoping/authz decisions for the agenda (projects + tasks) module and why it sits outside the role-permission system
 ---
 
-# Per-user todos (Agenda module)
+# Agenda is the only non-singleton data
 
-`user_todos` table is the only **per-user** data in this otherwise singleton app
-(everything else lives in the shared `taller_state` row). All `/todos` routes are
-`requireAuth` and scoped to `req.auth.user.id`; PATCH/DELETE use `and(eq(id), eq(userId))`
-so a user can never touch another user's rows.
+Everything else in this app is a shared singleton (one `taller_state` row). The agenda
+(projects + tasks) is the sole per-user / collaborative data. The legacy per-user todos
+table is retained ONLY for a one-time startup migration into general tasks — do not build
+new features on it.
 
-**Why "agenda" is not in the role-permission matrix:** it is a personal feature every
-authenticated user should always have. The sidebar filter is
-`n.id === "agenda" || can(n.id, "view")` — "agenda" is intentionally excluded from the
-`can()` gate. Do not add an "agenda" key to MODULES.
+# Visibility & authorization decisions
 
-# completedAt is transition-aware
+- **Personal project**: visible/writable only by owner.
+- **Shared project**: visible to all authed users; any authed user may CRUD its tasks, but
+  only the owner may rename/delete the project itself.
+- **General task** (no project): personal, owner-only.
 
-`PATCH /todos/:id` reads the current row first and only stamps `completedAt = now`
-on a real `false -> true` transition (and clears it on `true -> false`). Do NOT set
-it whenever `hecho:true` is merely present in the body — an idempotent re-send would
-overwrite the original completion time. Priority is whitelisted server-side
-(alta/media/baja), defaults to "media".
+**Assignees ("Asignado a") are shared-project only, enforced server-side.** On create and
+update, assignees are forced empty for personal projects and general tasks, and cleared when
+a task is moved off a shared project. The UI hiding the column is NOT the enforcement.
+**Why:** assignment only makes sense for multi-person collaboration; allowing it elsewhere
+produced inconsistent data via direct API calls. **How to apply:** any new task write path
+must re-derive "is destination shared?" and gate assignees on it — never trust the client.
+
+# Why agenda bypasses the role-permission matrix
+
+The agenda is a personal feature every authenticated user should always have, so it is
+intentionally excluded from the `can()` permission gate (the sidebar shows it
+unconditionally). Do not add it to the module permission list. **Why:** gating it behind
+roles would let an admin accidentally remove every user's personal task list.
+
+# completedAt is transition-aware, not a re-stamp
+
+Completion is driven by `estado` (the enum), not a boolean. `completedAt` is stamped only on
+a real transition INTO "hecho" and cleared only on a real transition OUT of it — never
+re-stamped on an idempotent re-send. **Why:** monthly/period reporting depends on an accurate
+first-completion timestamp.
 
 # Técnicos management is admin-only
 
-Técnico list management is NOT a top-level module anymore. It lives as a subtab inside
-AdminPage (which only renders for `can("admin","view")`). The `tecnicos` key still exists
-in the MODULES permission matrix but is a dead/stale permission surface (no navigable
-module maps to it) — kept to avoid touching seeded role permissions.
+Técnico list management is a subtab inside the admin page (admin-view only), not a top-level
+module. A stale `tecnicos` permission key remains in the module list — kept to avoid
+disturbing seeded role permissions; treat it as dead surface.

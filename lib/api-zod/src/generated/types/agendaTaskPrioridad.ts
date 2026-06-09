@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type TodoInputPrioridad = typeof TodoInputPrioridad[keyof typeof TodoInputPrioridad];
+export type AgendaTaskPrioridad = typeof AgendaTaskPrioridad[keyof typeof AgendaTaskPrioridad];
 
 
-export const TodoInputPrioridad = {
+export const AgendaTaskPrioridad = {
   alta: 'alta',
   media: 'media',
   baja: 'baja',

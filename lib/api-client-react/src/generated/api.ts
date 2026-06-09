@@ -20,20 +20,24 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AgendaData,
+  AgendaTask,
+  AgendaTaskInput,
+  AgendaTaskUpdate,
   AuthSession,
   Conflict,
   EquipoHistoryEntry,
   Error,
   HealthStatus,
   LoginInput,
+  Project,
+  ProjectInput,
+  ProjectUpdate,
   Role,
   RoleInput,
   RoleUpdate,
   TallerState,
   TallerStateInput,
-  Todo,
-  TodoInput,
-  TodoUpdate,
   User,
   UserInput,
   UserUpdate
@@ -433,20 +437,20 @@ export function useGetEquipoHistory<TData = Awaited<ReturnType<typeof getEquipoH
 
 
 
-export const getListTodosUrl = () => {
+export const getGetAgendaUrl = () => {
 
 
 
 
-  return `/api/todos`
+  return `/api/agenda`
 }
 
 /**
- * @summary List the current user's todos
+ * @summary Get projects and tasks visible to the current user, plus the user roster
  */
-export const listTodos = async ( options?: RequestInit): Promise<Todo[]> => {
+export const getAgenda = async ( options?: RequestInit): Promise<AgendaData> => {
 
-  return customFetch<Todo[]>(getListTodosUrl(),
+  return customFetch<AgendaData>(getGetAgendaUrl(),
   {
     ...options,
     method: 'GET'
@@ -459,45 +463,45 @@ export const listTodos = async ( options?: RequestInit): Promise<Todo[]> => {
 
 
 
-export const getListTodosQueryKey = () => {
+export const getGetAgendaQueryKey = () => {
     return [
-    `/api/todos`
+    `/api/agenda`
     ] as const;
     }
 
 
-export const getListTodosQueryOptions = <TData = Awaited<ReturnType<typeof listTodos>>, TError = ErrorType<Error>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTodos>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetAgendaQueryOptions = <TData = Awaited<ReturnType<typeof getAgenda>>, TError = ErrorType<Error>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAgenda>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListTodosQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetAgendaQueryKey();
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTodos>>> = ({ signal }) => listTodos({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAgenda>>> = ({ signal }) => getAgenda({ signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTodos>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAgenda>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type ListTodosQueryResult = NonNullable<Awaited<ReturnType<typeof listTodos>>>
-export type ListTodosQueryError = ErrorType<Error>
+export type GetAgendaQueryResult = NonNullable<Awaited<ReturnType<typeof getAgenda>>>
+export type GetAgendaQueryError = ErrorType<Error>
 
 
 /**
- * @summary List the current user's todos
+ * @summary Get projects and tasks visible to the current user, plus the user roster
  */
 
-export function useListTodos<TData = Awaited<ReturnType<typeof listTodos>>, TError = ErrorType<Error>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTodos>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useGetAgenda<TData = Awaited<ReturnType<typeof getAgenda>>, TError = ErrorType<Error>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAgenda>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListTodosQueryOptions(options)
+  const queryOptions = getGetAgendaQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -510,37 +514,37 @@ export function useListTodos<TData = Awaited<ReturnType<typeof listTodos>>, TErr
 
 
 
-export const getCreateTodoUrl = () => {
+export const getCreateAgendaProjectUrl = () => {
 
 
 
 
-  return `/api/todos`
+  return `/api/agenda/projects`
 }
 
 /**
- * @summary Create a todo for the current user
+ * @summary Create a project
  */
-export const createTodo = async (todoInput: TodoInput, options?: RequestInit): Promise<Todo> => {
+export const createAgendaProject = async (projectInput: ProjectInput, options?: RequestInit): Promise<Project> => {
 
-  return customFetch<Todo>(getCreateTodoUrl(),
+  return customFetch<Project>(getCreateAgendaProjectUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      todoInput,)
+      projectInput,)
   }
 );}
 
 
 
 
-export const getCreateTodoMutationOptions = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTodo>>, TError,{data: BodyType<TodoInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof createTodo>>, TError,{data: BodyType<TodoInput>}, TContext> => {
+export const getCreateAgendaProjectMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAgendaProject>>, TError,{data: BodyType<ProjectInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAgendaProject>>, TError,{data: BodyType<ProjectInput>}, TContext> => {
 
-const mutationKey = ['createTodo'];
+const mutationKey = ['createAgendaProject'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -550,10 +554,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createTodo>>, {data: BodyType<TodoInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAgendaProject>>, {data: BodyType<ProjectInput>}> = (props) => {
           const {data} = props ?? {};
 
-          return  createTodo(data,requestOptions)
+          return  createAgendaProject(data,requestOptions)
         }
 
 
@@ -563,56 +567,56 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type CreateTodoMutationResult = NonNullable<Awaited<ReturnType<typeof createTodo>>>
-    export type CreateTodoMutationBody = BodyType<TodoInput>
-    export type CreateTodoMutationError = ErrorType<Error>
+    export type CreateAgendaProjectMutationResult = NonNullable<Awaited<ReturnType<typeof createAgendaProject>>>
+    export type CreateAgendaProjectMutationBody = BodyType<ProjectInput>
+    export type CreateAgendaProjectMutationError = ErrorType<Error>
 
     /**
- * @summary Create a todo for the current user
+ * @summary Create a project
  */
-export const useCreateTodo = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTodo>>, TError,{data: BodyType<TodoInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useCreateAgendaProject = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAgendaProject>>, TError,{data: BodyType<ProjectInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof createTodo>>,
+        Awaited<ReturnType<typeof createAgendaProject>>,
         TError,
-        {data: BodyType<TodoInput>},
+        {data: BodyType<ProjectInput>},
         TContext
       > => {
-      return useMutation(getCreateTodoMutationOptions(options));
+      return useMutation(getCreateAgendaProjectMutationOptions(options));
     }
 
-export const getUpdateTodoUrl = (id: number,) => {
+export const getUpdateAgendaProjectUrl = (id: number,) => {
 
 
 
 
-  return `/api/todos/${id}`
+  return `/api/agenda/projects/${id}`
 }
 
 /**
- * @summary Update one of the current user's todos
+ * @summary Update a project (owner only)
  */
-export const updateTodo = async (id: number,
-    todoUpdate: TodoUpdate, options?: RequestInit): Promise<Todo> => {
+export const updateAgendaProject = async (id: number,
+    projectUpdate: ProjectUpdate, options?: RequestInit): Promise<Project> => {
 
-  return customFetch<Todo>(getUpdateTodoUrl(id),
+  return customFetch<Project>(getUpdateAgendaProjectUrl(id),
   {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      todoUpdate,)
+      projectUpdate,)
   }
 );}
 
 
 
 
-export const getUpdateTodoMutationOptions = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTodo>>, TError,{id: number;data: BodyType<TodoUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateTodo>>, TError,{id: number;data: BodyType<TodoUpdate>}, TContext> => {
+export const getUpdateAgendaProjectMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAgendaProject>>, TError,{id: number;data: BodyType<ProjectUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAgendaProject>>, TError,{id: number;data: BodyType<ProjectUpdate>}, TContext> => {
 
-const mutationKey = ['updateTodo'];
+const mutationKey = ['updateAgendaProject'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -622,10 +626,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTodo>>, {id: number;data: BodyType<TodoUpdate>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAgendaProject>>, {id: number;data: BodyType<ProjectUpdate>}> = (props) => {
           const {id,data} = props ?? {};
 
-          return  updateTodo(id,data,requestOptions)
+          return  updateAgendaProject(id,data,requestOptions)
         }
 
 
@@ -635,38 +639,38 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type UpdateTodoMutationResult = NonNullable<Awaited<ReturnType<typeof updateTodo>>>
-    export type UpdateTodoMutationBody = BodyType<TodoUpdate>
-    export type UpdateTodoMutationError = ErrorType<Error>
+    export type UpdateAgendaProjectMutationResult = NonNullable<Awaited<ReturnType<typeof updateAgendaProject>>>
+    export type UpdateAgendaProjectMutationBody = BodyType<ProjectUpdate>
+    export type UpdateAgendaProjectMutationError = ErrorType<Error>
 
     /**
- * @summary Update one of the current user's todos
+ * @summary Update a project (owner only)
  */
-export const useUpdateTodo = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTodo>>, TError,{id: number;data: BodyType<TodoUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useUpdateAgendaProject = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAgendaProject>>, TError,{id: number;data: BodyType<ProjectUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof updateTodo>>,
+        Awaited<ReturnType<typeof updateAgendaProject>>,
         TError,
-        {id: number;data: BodyType<TodoUpdate>},
+        {id: number;data: BodyType<ProjectUpdate>},
         TContext
       > => {
-      return useMutation(getUpdateTodoMutationOptions(options));
+      return useMutation(getUpdateAgendaProjectMutationOptions(options));
     }
 
-export const getDeleteTodoUrl = (id: number,) => {
+export const getDeleteAgendaProjectUrl = (id: number,) => {
 
 
 
 
-  return `/api/todos/${id}`
+  return `/api/agenda/projects/${id}`
 }
 
 /**
- * @summary Delete one of the current user's todos
+ * @summary Delete a project and its tasks (owner only)
  */
-export const deleteTodo = async (id: number, options?: RequestInit): Promise<HealthStatus> => {
+export const deleteAgendaProject = async (id: number, options?: RequestInit): Promise<HealthStatus> => {
 
-  return customFetch<HealthStatus>(getDeleteTodoUrl(id),
+  return customFetch<HealthStatus>(getDeleteAgendaProjectUrl(id),
   {
     ...options,
     method: 'DELETE'
@@ -678,11 +682,11 @@ export const deleteTodo = async (id: number, options?: RequestInit): Promise<Hea
 
 
 
-export const getDeleteTodoMutationOptions = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTodo>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteTodo>>, TError,{id: number}, TContext> => {
+export const getDeleteAgendaProjectMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAgendaProject>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAgendaProject>>, TError,{id: number}, TContext> => {
 
-const mutationKey = ['deleteTodo'];
+const mutationKey = ['deleteAgendaProject'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -692,10 +696,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTodo>>, {id: number}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAgendaProject>>, {id: number}> = (props) => {
           const {id} = props ?? {};
 
-          return  deleteTodo(id,requestOptions)
+          return  deleteAgendaProject(id,requestOptions)
         }
 
 
@@ -705,22 +709,235 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type DeleteTodoMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTodo>>>
+    export type DeleteAgendaProjectMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAgendaProject>>>
 
-    export type DeleteTodoMutationError = ErrorType<Error>
+    export type DeleteAgendaProjectMutationError = ErrorType<Error>
 
     /**
- * @summary Delete one of the current user's todos
+ * @summary Delete a project and its tasks (owner only)
  */
-export const useDeleteTodo = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTodo>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useDeleteAgendaProject = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAgendaProject>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof deleteTodo>>,
+        Awaited<ReturnType<typeof deleteAgendaProject>>,
         TError,
         {id: number},
         TContext
       > => {
-      return useMutation(getDeleteTodoMutationOptions(options));
+      return useMutation(getDeleteAgendaProjectMutationOptions(options));
+    }
+
+export const getCreateAgendaTaskUrl = () => {
+
+
+
+
+  return `/api/agenda/tasks`
+}
+
+/**
+ * @summary Create a task
+ */
+export const createAgendaTask = async (agendaTaskInput: AgendaTaskInput, options?: RequestInit): Promise<AgendaTask> => {
+
+  return customFetch<AgendaTask>(getCreateAgendaTaskUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      agendaTaskInput,)
+  }
+);}
+
+
+
+
+export const getCreateAgendaTaskMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAgendaTask>>, TError,{data: BodyType<AgendaTaskInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAgendaTask>>, TError,{data: BodyType<AgendaTaskInput>}, TContext> => {
+
+const mutationKey = ['createAgendaTask'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAgendaTask>>, {data: BodyType<AgendaTaskInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAgendaTask(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAgendaTaskMutationResult = NonNullable<Awaited<ReturnType<typeof createAgendaTask>>>
+    export type CreateAgendaTaskMutationBody = BodyType<AgendaTaskInput>
+    export type CreateAgendaTaskMutationError = ErrorType<Error>
+
+    /**
+ * @summary Create a task
+ */
+export const useCreateAgendaTask = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAgendaTask>>, TError,{data: BodyType<AgendaTaskInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAgendaTask>>,
+        TError,
+        {data: BodyType<AgendaTaskInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAgendaTaskMutationOptions(options));
+    }
+
+export const getUpdateAgendaTaskUrl = (id: number,) => {
+
+
+
+
+  return `/api/agenda/tasks/${id}`
+}
+
+/**
+ * @summary Update a task
+ */
+export const updateAgendaTask = async (id: number,
+    agendaTaskUpdate: AgendaTaskUpdate, options?: RequestInit): Promise<AgendaTask> => {
+
+  return customFetch<AgendaTask>(getUpdateAgendaTaskUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      agendaTaskUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateAgendaTaskMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAgendaTask>>, TError,{id: number;data: BodyType<AgendaTaskUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAgendaTask>>, TError,{id: number;data: BodyType<AgendaTaskUpdate>}, TContext> => {
+
+const mutationKey = ['updateAgendaTask'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAgendaTask>>, {id: number;data: BodyType<AgendaTaskUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateAgendaTask(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAgendaTaskMutationResult = NonNullable<Awaited<ReturnType<typeof updateAgendaTask>>>
+    export type UpdateAgendaTaskMutationBody = BodyType<AgendaTaskUpdate>
+    export type UpdateAgendaTaskMutationError = ErrorType<Error>
+
+    /**
+ * @summary Update a task
+ */
+export const useUpdateAgendaTask = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAgendaTask>>, TError,{id: number;data: BodyType<AgendaTaskUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAgendaTask>>,
+        TError,
+        {id: number;data: BodyType<AgendaTaskUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAgendaTaskMutationOptions(options));
+    }
+
+export const getDeleteAgendaTaskUrl = (id: number,) => {
+
+
+
+
+  return `/api/agenda/tasks/${id}`
+}
+
+/**
+ * @summary Delete a task
+ */
+export const deleteAgendaTask = async (id: number, options?: RequestInit): Promise<HealthStatus> => {
+
+  return customFetch<HealthStatus>(getDeleteAgendaTaskUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteAgendaTaskMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAgendaTask>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAgendaTask>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteAgendaTask'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAgendaTask>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteAgendaTask(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAgendaTaskMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAgendaTask>>>
+
+    export type DeleteAgendaTaskMutationError = ErrorType<Error>
+
+    /**
+ * @summary Delete a task
+ */
+export const useDeleteAgendaTask = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAgendaTask>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAgendaTask>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteAgendaTaskMutationOptions(options));
     }
 
 export const getLoginUrl = () => {
