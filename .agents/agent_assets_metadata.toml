@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "R8p3pUu0YLS6fAmSSriDt"
+uri = "file://changelog-5jun-9jun-2026.md"
+type = "text"
+title = "Changelog 5–9 Jun 2026"
