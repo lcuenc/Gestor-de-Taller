@@ -124,6 +124,114 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /todos:
+    get:
+      operationId: listTodos
+      tags: [todos]
+      summary: List the current user's todos
+      responses:
+        "200":
+          description: Todos ordered newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Todo"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: createTodo
+      tags: [todos]
+      summary: Create a todo for the current user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TodoInput"
+      responses:
+        "201":
+          description: Created todo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Todo"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /todos/{id}:
+    patch:
+      operationId: updateTodo
+      tags: [todos]
+      summary: Update one of the current user's todos
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: number }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TodoUpdate"
+      responses:
+        "200":
+          description: Updated todo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Todo"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteTodo
+      tags: [todos]
+      summary: Delete one of the current user's todos
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: number }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /auth/login:
     post:
       operationId: login
@@ -535,6 +643,34 @@ components:
         - campo
         - usuario
         - timestamp
+
+    Todo:
+      type: object
+      properties:
+        id:        { type: number }
+        texto:     { type: string }
+        hecho:     { type: boolean }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+      required:
+        - id
+        - texto
+        - hecho
+        - createdAt
+        - updatedAt
+
+    TodoInput:
+      type: object
+      properties:
+        texto: { type: string, minLength: 1 }
+      required:
+        - texto
+
+    TodoUpdate:
+      type: object
+      properties:
+        texto: { type: string, minLength: 1 }
+        hecho: { type: boolean }
 
     Error:
       type: object

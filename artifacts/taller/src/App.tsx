@@ -17,6 +17,11 @@ import {
   useDeleteRole,
   useGetEquipoHistory,
   useGetAllHistory,
+  getListTodosQueryOptions,
+  useListTodos,
+  useCreateTodo,
+  useUpdateTodo,
+  useDeleteTodo,
 } from "@workspace/api-client-react";
 import type {
   User,
@@ -26,6 +31,7 @@ import type {
   AuthSession,
   TallerState,
   EquipoHistoryEntry,
+  Todo,
 } from "@workspace/api-client-react";
 
 // ── Permissions model (mirrors backend MODULES) ────────────────
@@ -2789,15 +2795,136 @@ function RoleModal({ item, onSave, onClose }: {
 }
 
 // ── Admin page ─────────────────────────────────────────────────
-function AdminPage({ can, toast, currentUserId }: {
+function AgendaPage({ toast }: { toast: (msg: string, type?: string) => void }) {
+  const qc = useQueryClient();
+  const todosQ = useQuery({ ...getListTodosQueryOptions() });
+  const todos = (todosQ.data ?? []) as Todo[];
+  const { mutate: createTodo, isPending: creating } = useCreateTodo();
+  const { mutate: updateTodo } = useUpdateTodo();
+  const { mutate: deleteTodo } = useDeleteTodo();
+  const inv = () => qc.invalidateQueries({ queryKey: getListTodosQueryOptions().queryKey });
+
+  const [text, setText] = useState("");
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editVal, setEditVal] = useState("");
+
+  const add = () => {
+    const t = text.trim();
+    if (!t) return;
+    createTodo({ data: { texto: t } }, { onSuccess: () => { setText(""); inv(); }, onError: () => toast("No se pudo agregar la tarea", "err") });
+  };
+  const toggle = (todo: Todo) => updateTodo({ id: todo.id, data: { hecho: !todo.hecho } }, { onSuccess: inv, onError: () => toast("No se pudo actualizar", "err") });
+  const saveEdit = () => {
+    const v = editVal.trim();
+    if (editId === null) return;
+    if (!v) { setEditId(null); return; }
+    updateTodo({ id: editId, data: { texto: v } }, { onSuccess: () => { setEditId(null); inv(); }, onError: () => toast("No se pudo editar", "err") });
+  };
+  const remove = (id: number) => deleteTodo({ id }, { onSuccess: inv, onError: () => toast("No se pudo eliminar", "err") });
+
+  const pendientes = todos.filter(t => !t.hecho);
+  const hechas = todos.filter(t => t.hecho);
+
+  const row = (t: Todo) => (
+    <div key={t.id} className="tec-row">
+      <button
+        className="btni"
+        onClick={() => toggle(t)}
+        title={t.hecho ? "Marcar como pendiente" : "Marcar como hecha"}
+        style={{ flexShrink: 0 }}
+      >
+        <div style={{
+          width: 18, height: 18, borderRadius: 5,
+          border: `1.5px solid ${t.hecho ? "var(--em)" : "var(--bo)"}`,
+          background: t.hecho ? "var(--em)" : "transparent",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          {t.hecho && <Ico n="check" s={12} c="#fff" />}
+        </div>
+      </button>
+      {editId === t.id ? (
+        <>
+          <input
+            className="fi"
+            value={editVal}
+            onChange={e => setEditVal(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditId(null); }}
+            style={{ flex: 1 }}
+            autoFocus
+          />
+          <button className="btn btnp" style={{ fontSize: 11, padding: "4px 10px" }} onClick={saveEdit}><Ico n="check" s={12} c="#fff" />Guardar</button>
+          <button className="btni" onClick={() => setEditId(null)}><Ico n="x" s={14} /></button>
+        </>
+      ) : (
+        <>
+          <span style={{
+            flex: 1, fontSize: 13, fontWeight: 500,
+            color: t.hecho ? "var(--t3)" : "var(--t)",
+            textDecoration: t.hecho ? "line-through" : "none",
+            wordBreak: "break-word",
+          }}>{t.texto}</span>
+          <button className="btni" onClick={() => { setEditId(t.id); setEditVal(t.texto); }} title="Editar"><Ico n="edit" s={14} /></button>
+          <button className="btni" onClick={() => remove(t.id)} title="Eliminar"><Ico n="trash" s={14} c="var(--ro)" /></button>
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <div style={{ maxWidth: 720 }}>
+      <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+        <div className="fl" style={{ marginBottom: 6 }}>Nueva tarea / nota</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            className="fi"
+            value={text}
+            onChange={e => setText(e.target.value)}
+            placeholder="Anotá un pendiente y seguilo desde cualquier dispositivo…"
+            onKeyDown={e => { if (e.key === "Enter") add(); }}
+            style={{ flex: 1 }}
+          />
+          <button className="btn btnp" onClick={add} disabled={creating || !text.trim()} style={{ flexShrink: 0 }}>
+            <Ico n="plus" s={14} c="#fff" />Agregar
+          </button>
+        </div>
+      </div>
+
+      {todosQ.isLoading ? (
+        <div className="empty">Cargando…</div>
+      ) : todos.length === 0 ? (
+        <div className="empty">No tenés tareas anotadas todavía.</div>
+      ) : (
+        <>
+          <div className="sblbl" style={{ margin: "0 0 6px 2px" }}>Pendientes ({pendientes.length})</div>
+          <div className="card" style={{ padding: "4px 0", marginBottom: 16 }}>
+            {pendientes.length === 0 ? <div className="empty">Sin pendientes 🎉</div> : pendientes.map(row)}
+          </div>
+          {hechas.length > 0 && (
+            <>
+              <div className="sblbl" style={{ margin: "0 0 6px 2px" }}>Completadas ({hechas.length})</div>
+              <div className="card" style={{ padding: "4px 0" }}>
+                {hechas.map(row)}
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function AdminPage({ can, toast, currentUserId, tecnicos, onSaveTecnicos }: {
   can: (m: ModuleId, a: PermAction) => boolean;
   toast: (msg: string, type?: string) => void;
   currentUserId: number | null;
+  tecnicos: string[];
+  onSaveTecnicos: (t: string[]) => void;
 }) {
   const qc = useQueryClient();
-  const [sub, setSub] = useState<"users" | "roles">("users");
+  const [sub, setSub] = useState<"users" | "roles" | "tecnicos">("users");
   const [userModal, setUserModal] = useState<{ item: User | null } | null>(null);
   const [roleModal, setRoleModal] = useState<{ item: Role | null } | null>(null);
+  const [showTec, setShowTec] = useState(false);
 
   const usersQ = useQuery({ ...getListUsersQueryOptions() });
   const rolesQ = useQuery({ ...getListRolesQueryOptions() });
@@ -2870,6 +2997,7 @@ function AdminPage({ can, toast, currentUserId }: {
         <div className="sub-tab-bar" style={{ marginBottom: 0 }}>
           <button className={`sub-tab${sub === "users" ? " active" : ""}`} onClick={() => setSub("users")}>Usuarios</button>
           <button className={`sub-tab${sub === "roles" ? " active" : ""}`} onClick={() => setSub("roles")}>Roles</button>
+          <button className={`sub-tab${sub === "tecnicos" ? " active" : ""}`} onClick={() => setSub("tecnicos")}>Técnicos</button>
         </div>
         {sub === "users" && can("admin", "create") && (
           <button className="btn btnp" style={{ fontSize: 11, padding: "5px 14px" }} onClick={() => setUserModal({ item: null })}>
@@ -2922,8 +3050,34 @@ function AdminPage({ can, toast, currentUserId }: {
         </div>
       )}
 
+      {sub === "tecnicos" && (
+        <div className="tw">
+          <div className="th"><Ico n="users" s={14} c="var(--te)" /><span className="tt">Técnicos</span><span style={{ marginLeft: 6, fontSize: 11, color: "var(--t3)" }}>{tecnicos.length}</span></div>
+          <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 12, color: "var(--t3)" }}>
+              Gestión de la lista de técnicos del taller. Solo accesible desde Administración.
+            </div>
+            {can("admin", "edit") && (
+              <button className="btn btnp" style={{ fontSize: 11, padding: "5px 14px", flexShrink: 0 }} onClick={() => setShowTec(true)}>
+                <Ico n="users" s={13} c="#fff" />Gestionar técnicos
+              </button>
+            )}
+          </div>
+          {tecnicos.length === 0 ? <div className="empty">Sin técnicos registrados</div> : tecnicos.map((t, i) => {
+            const col = aColor(t);
+            return (
+              <div key={i} className="ri">
+                <div style={{ width: 30, height: 30, borderRadius: "50%", background: `${col}22`, border: `1px solid ${col}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: col, flexShrink: 0 }}>{inits(t)}</div>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "var(--t)" }}>{t}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {userModal && <UserModal item={userModal.item} roles={roles} onSave={saveUser} onClose={() => setUserModal(null)} />}
       {roleModal && <RoleModal item={roleModal.item} onSave={saveRole} onClose={() => setRoleModal(null)} />}
+      {showTec && <TecnicosModal tecnicos={tecnicos} onSave={onSaveTecnicos} onClose={() => setShowTec(false)} canEdit={can("admin", "edit")} />}
     </div>
   );
 }
@@ -3546,7 +3700,6 @@ export default function App() {
   const [modal, setModal] = useState<{ type: string; item: Equipo | GPVEntry | null; canEdit?: boolean } | null>(null);
   const [modalE, setModalE] = useState<Equipo | null>(null);
   const [confirmState, setConfirm] = useState<{ source: string; item: Equipo | GPVEntry; msg: string } | null>(null);
-  const [showTecModal, setShowTecModal] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastAppliedAtRef = useRef<string | null>(null);
 
@@ -3802,11 +3955,13 @@ export default function App() {
     { id: "venta",     label: "Venta/GPV",  icon: "tag",      alert: gpvAlertaCnt, count: gpvList.length + disp.length },
     { id: "kpis",      label: "KPIs",       icon: "kpi" },
     { id: "layout",    label: "Layout",     icon: "bar" },
-    { id: "tecnicos",  label: "Técnicos",   icon: "users",    count: tecnicos.length },
     { id: "licencias", label: "Licencias",  icon: "calendar", count: enLicenciaHoy.size || undefined },
+    { id: "agenda",    label: "Agenda",     icon: "list" },
     { id: "admin",     label: "Administración", icon: "shield" },
   ];
-  const navItems = allNavItems.filter(n => can(n.id as ModuleId, "view"));
+  // "agenda" is a personal module available to every authenticated user, so it is
+  // not gated by the role permission system.
+  const navItems = allNavItems.filter(n => n.id === "agenda" || can(n.id as ModuleId, "view"));
   const titles: Record<string, [string, string]> = {
     dashboard: ["Dashboard", "Resumen general"],
     licencias: ["Licencias", "Saldos y disponibilidad del personal"],
@@ -3814,14 +3969,14 @@ export default function App() {
     venta:     ["Venta / GPV", "Disponibles · Garantía por venta"],
     kpis:      ["KPIs — Equipos", "Indicadores de rendimiento operativo"],
     layout:    ["Layout del Taller", "Mapa visual de posiciones"],
-    tecnicos:  ["Técnicos", "Gestión del equipo"],
+    agenda:    ["Mi Agenda", "Tareas y notas personales"],
     admin:     ["Administración", "Usuarios, roles y permisos"],
   };
 
   // Keep the active tab valid for the current user's permissions
   useEffect(() => {
     if (!auth) return;
-    const viewable = allNavItems.filter(n => n.id !== "tecnicos" && can(n.id as ModuleId, "view")).map(n => n.id);
+    const viewable = allNavItems.filter(n => n.id === "agenda" || can(n.id as ModuleId, "view")).map(n => n.id);
     if (viewable.length && !viewable.includes(tab)) setTab(viewable[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth, session, tab]);
@@ -3875,10 +4030,7 @@ export default function App() {
             <nav className="sbnav">
               {!collapsed && <div className="sblbl">Módulos</div>}
               {navItems.map(n => (
-                <div key={n.id} className={`ni ${tab === n.id ? "act" : ""}`} onClick={() => {
-                  if (n.id === "tecnicos") setShowTecModal(true);
-                  else setTab(n.id);
-                }}>
+                <div key={n.id} className={`ni ${tab === n.id ? "act" : ""}`} onClick={() => setTab(n.id)}>
                   <Ico n={n.icon} s={17} c={tab === n.id ? "var(--em)" : "var(--t3)"} />
                   {!collapsed && <span className="nilbl">{n.label}</span>}
                   {!collapsed && (n as any).alert > 0 && <span className="na">{(n as any).alert}</span>}
@@ -3976,7 +4128,8 @@ export default function App() {
                   onDelete={m => setLicDel(m)}
                 />
               )}
-              {tab === "admin" && <AdminPage can={can} toast={toast} currentUserId={currentUser?.id ?? null} />}
+              {tab === "agenda" && <AgendaPage toast={toast} />}
+              {tab === "admin" && <AdminPage can={can} toast={toast} currentUserId={currentUser?.id ?? null} tecnicos={tecnicos} onSaveTecnicos={saveTecnicos} />}
               <Toasts toasts={toasts} />
             </main>
 
@@ -3994,7 +4147,6 @@ export default function App() {
             {modal?.type === "gpv" && <ModalGPV item={modal.item as GPVEntry | null} onSave={saveGPV} onClose={() => setModal(null)} canEdit={modal.canEdit ?? false} />}
             {modalE && <ModalEntrega equipo={modalE} onConfirm={confirmarEntrega} onClose={() => setModalE(null)} />}
             {confirmState && <Confirm msg={confirmState.msg} onOk={doDelete} onCancel={() => setConfirm(null)} />}
-            {showTecModal && <TecnicosModal tecnicos={tecnicos} onSave={saveTecnicos} onClose={() => setShowTecModal(false)} canEdit={can("tecnicos", "edit")} />}
             {licModal === "registrar" && (
               <RegistrarLicenciaModal
                 tecnicos={tecnicos}

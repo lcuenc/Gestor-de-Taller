@@ -30,7 +30,7 @@ _Populate as you build — non-obvious choices a reader couldn't infer from the 
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Workshop asset-management / supervision tool ("Gestión de Activos — Movimiento de Suelo"). Modules: Dashboard, Taller (repairs), Venta/GPV, KPIs, Layout, Licencias, a personal Agenda (per-user to-do/notas), and Administración (users, roles, permissions, and técnico management). Most data is a shared singleton; the Agenda is the only per-user data. Técnico management is admin-only (a subtab inside Administración). The Agenda module is available to every authenticated user regardless of role permissions.
 
 ## User preferences
 

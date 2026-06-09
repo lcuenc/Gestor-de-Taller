@@ -101,6 +101,25 @@ export interface EquipoHistoryEntry {
   timestamp: string;
 }
 
+export interface Todo {
+  id: number;
+  texto: string;
+  hecho: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TodoInput {
+  /** @minLength 1 */
+  texto: string;
+}
+
+export interface TodoUpdate {
+  /** @minLength 1 */
+  texto?: string;
+  hecho?: boolean;
+}
+
 export interface Error {
   error: string;
 }

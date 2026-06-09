@@ -212,6 +212,66 @@ export const GetEquipoHistoryResponse = zod.array(GetEquipoHistoryResponseItem)
 
 
 /**
+ * @summary List the current user's todos
+ */
+export const ListTodosResponseItem = zod.object({
+  "id": zod.number(),
+  "texto": zod.string(),
+  "hecho": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListTodosResponse = zod.array(ListTodosResponseItem)
+
+
+/**
+ * @summary Create a todo for the current user
+ */
+
+
+
+export const CreateTodoBody = zod.object({
+  "texto": zod.string().min(1)
+})
+
+
+/**
+ * @summary Update one of the current user's todos
+ */
+export const UpdateTodoParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const UpdateTodoBody = zod.object({
+  "texto": zod.string().min(1).optional(),
+  "hecho": zod.boolean().optional()
+})
+
+export const UpdateTodoResponse = zod.object({
+  "id": zod.number(),
+  "texto": zod.string(),
+  "hecho": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Delete one of the current user's todos
+ */
+export const DeleteTodoParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteTodoResponse = zod.object({
+  "status": zod.string()
+})
+
+
+/**
  * @summary Log in with username and password
  */
 
