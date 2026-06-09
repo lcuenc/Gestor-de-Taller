@@ -11,6 +11,7 @@ export interface HealthStatus {
 
 export interface Equipo {
   id: number;
+  tipoActivo?: string;
   destino: string;
   modelo: string;
   interno: string;

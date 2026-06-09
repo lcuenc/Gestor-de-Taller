@@ -24,6 +24,7 @@ export const HealthCheckResponse = zod.object({
 export const GetTallerStateResponse = zod.object({
   "equipos": zod.array(zod.object({
   "id": zod.number(),
+  "tipoActivo": zod.string().optional(),
   "destino": zod.string(),
   "modelo": zod.string(),
   "interno": zod.string(),
@@ -79,6 +80,7 @@ export const GetTallerStateResponse = zod.object({
 export const SaveTallerStateBody = zod.object({
   "equipos": zod.array(zod.object({
   "id": zod.number(),
+  "tipoActivo": zod.string().optional(),
   "destino": zod.string(),
   "modelo": zod.string(),
   "interno": zod.string(),
@@ -129,6 +131,7 @@ export const SaveTallerStateBody = zod.object({
 export const SaveTallerStateResponse = zod.object({
   "equipos": zod.array(zod.object({
   "id": zod.number(),
+  "tipoActivo": zod.string().optional(),
   "destino": zod.string(),
   "modelo": zod.string(),
   "interno": zod.string(),

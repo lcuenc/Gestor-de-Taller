@@ -111,6 +111,7 @@ const estaAtrasado = (e: Equipo): boolean => {
 
 interface Equipo {
   id: number;
+  tipoActivo: string;
   destino: string;
   modelo: string;
   interno: string;
@@ -221,6 +222,7 @@ const buildOcup = (equipos: Equipo[], excId: number | null = null) => {
 
 const normalizeEquipo = (e: Partial<Equipo>): Equipo => ({
   id: e.id!,
+  tipoActivo: e.tipoActivo || "equipo",
   destino: e.destino || "alquiler",
   modelo: e.modelo || "",
   interno: e.interno || "",
@@ -898,7 +900,7 @@ function TallerModal({ item, allEquipos, onSave, onClose, tecnicos, canEdit = tr
 }) {
   const [modalTab, setModalTab] = useState<"datos" | "historial">("datos");
   const [form, setForm] = useState<Partial<Equipo>>(item || {
-    destino: "alquiler", modelo: "", interno: "", accesorio: "", cliente: "",
+    tipoActivo: "equipo", destino: "alquiler", modelo: "", interno: "", accesorio: "", cliente: "",
     fechaIngreso: new Date().toISOString().slice(0, 10),
     estado: "A inspeccionar", tecnicos: [], observacion: "", prioridad: "ninguna",
   });
@@ -943,6 +945,23 @@ function TallerModal({ item, allEquipos, onSave, onClose, tecnicos, canEdit = tr
 
         {modalTab === "datos" && (
           <div className="mb">
+            <div className="fg">
+              <div className="fl">Tipo de activo</div>
+              <div className="trow">
+                {([["equipo", "Equipo"], ["accesorio", "Accesorio"]] as [string, string][]).map(([k, l]) => (
+                  <button key={k} type="button" className="tbtn"
+                    onClick={() => set("tipoActivo", k)}
+                    style={{
+                      borderColor: (form.tipoActivo || "equipo") === k ? "var(--em)" : "var(--bo)",
+                      background:  (form.tipoActivo || "equipo") === k ? "rgba(16,185,129,.12)" : "var(--bg3)",
+                      color:       (form.tipoActivo || "equipo") === k ? "var(--em)" : "var(--t3)",
+                    }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="fg">
               <div className="fl">Destino del equipo</div>
               <div className="trow">
@@ -1526,6 +1545,7 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
   const [ef, setEf] = useState("Activos");
   const [df, setDf] = useState("Todos");
   const [tf, setTf] = useState("Todos");
+  const [af, setAf] = useState("Todos");
   const [sortCol, setSortCol] = useState("fechaIngreso");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
@@ -1538,7 +1558,8 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
     const mE = ef === "Todos" ? true : ef === "Activos" ? ESTADOS_ACTIVOS.has(m.estado) : m.estado === ef;
     const mD = df === "Todos" || m.destino === df;
     const mT = tf === "Todos" || (m.tecnicos || []).includes(tf);
-    return mS && mE && mD && mT;
+    const mA = af === "Todos" || (m.tipoActivo || "equipo") === af;
+    return mS && mE && mD && mT && mA;
   });
 
   const sorted = [...fil].sort((a, b) => {
@@ -1576,6 +1597,7 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
   const exportExcel = () => {
     const data = sorted.map(m => ({
       "Modelo": m.modelo,
+      "Tipo de activo": (m.tipoActivo || "equipo") === "accesorio" ? "Accesorio" : "Equipo",
       "Nº Interno": m.interno || "",
       "Accesorio": m.accesorio || "",
       "Cliente": m.cliente || "",
@@ -1625,6 +1647,12 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
         {["Todos", "alquiler", "venta"].map(d => (
           <button key={d} className={`chip ${df === d ? "on" : ""}`} onClick={() => setDf(d)}>
             {d === "Todos" ? "Todos" : d === "venta" ? "Venta" : "Alquiler"}
+          </button>
+        ))}
+        <div className="sep" />
+        {["Todos", "equipo", "accesorio"].map(a => (
+          <button key={a} className={`chip ${af === a ? "on" : ""}`} onClick={() => setAf(a)}>
+            {a === "Todos" ? "Todos" : a === "equipo" ? "Equipos" : "Accesorios"}
           </button>
         ))}
         {tecConEq.length > 0 && (
@@ -1685,6 +1713,9 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
                     <td>
                       {isRojo && <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "var(--ro)", marginRight: 6, verticalAlign: "middle" }} />}
                       <span style={{ fontWeight: 700, fontSize: 13 }}>{m.modelo}</span>
+                      {(m.tipoActivo || "equipo") === "accesorio" && (
+                        <span style={{ marginLeft: 6, fontSize: 9, padding: "1px 6px", borderRadius: 99, background: "rgba(16,185,129,.12)", color: "var(--em)", border: "1px solid rgba(16,185,129,.25)", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".3px", verticalAlign: "middle" }}>Accesorio</span>
+                      )}
                       {m.interno && <div style={{ fontSize: 10, color: "var(--t3)", fontFamily: "monospace" }}>{m.interno}</div>}
                       {m.accesorio && <div style={{ fontSize: 10, color: "var(--t3)" }}>{m.accesorio}</div>}
                     </td>

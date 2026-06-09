@@ -3,3 +3,4 @@
 - [Personal todos module](personal-todos-module.md) — user_todos is the only per-user data (rest is singleton); "agenda" sidebar bypasses can() gate; técnicos is admin-only subtab, stale tecnicos key kept in MODULES.
 - [Taller delivery semantics](taller-delivery-semantics.md) — delivered equipos are removed from live list; monthly "salidas" reports must use "eliminado" history events, not the current equipos list.
 - [taller-state read authz](taller-state-read-authz.md) — GET /taller/state intentionally returns ALL sections to any authed user; authz is write-only + client-side tab hiding. Don't "fix" it — availability feature depends on it.
+- [taller-state schema evolution](taller-state-schema-evolution.md) — new Equipo/GPV jsonb fields must be optional in OpenAPI (required-in-TS + normalizeEquipo default); a `required` field 500s GET /taller/state on legacy rows.

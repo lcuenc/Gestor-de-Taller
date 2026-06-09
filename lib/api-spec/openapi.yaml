@@ -475,6 +475,7 @@ components:
       type: object
       properties:
         id:          { type: number }
+        tipoActivo:  { type: string }
         destino:     { type: string }
         modelo:      { type: string }
         interno:     { type: string }
