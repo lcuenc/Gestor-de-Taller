@@ -5,11 +5,14 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { TodoPrioridad } from './todoPrioridad';
 
 export interface Todo {
   id: number;
   texto: string;
   hecho: boolean;
+  prioridad: TodoPrioridad;
   createdAt: string;
+  completedAt: string | null;
   updatedAt: string;
 }

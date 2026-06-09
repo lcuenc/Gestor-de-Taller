@@ -5,9 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { TodoUpdatePrioridad } from './todoUpdatePrioridad';
 
 export interface TodoUpdate {
   /** @minLength 1 */
   texto?: string;
   hecho?: boolean;
+  prioridad?: TodoUpdatePrioridad;
 }

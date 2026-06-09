@@ -101,23 +101,54 @@ export interface EquipoHistoryEntry {
   timestamp: string;
 }
 
+export type TodoPrioridad = typeof TodoPrioridad[keyof typeof TodoPrioridad];
+
+
+export const TodoPrioridad = {
+  alta: 'alta',
+  media: 'media',
+  baja: 'baja',
+} as const;
+
 export interface Todo {
   id: number;
   texto: string;
   hecho: boolean;
+  prioridad: TodoPrioridad;
   createdAt: string;
+  completedAt: string | null;
   updatedAt: string;
 }
+
+export type TodoInputPrioridad = typeof TodoInputPrioridad[keyof typeof TodoInputPrioridad];
+
+
+export const TodoInputPrioridad = {
+  alta: 'alta',
+  media: 'media',
+  baja: 'baja',
+} as const;
 
 export interface TodoInput {
   /** @minLength 1 */
   texto: string;
+  prioridad?: TodoInputPrioridad;
 }
+
+export type TodoUpdatePrioridad = typeof TodoUpdatePrioridad[keyof typeof TodoUpdatePrioridad];
+
+
+export const TodoUpdatePrioridad = {
+  alta: 'alta',
+  media: 'media',
+  baja: 'baja',
+} as const;
 
 export interface TodoUpdate {
   /** @minLength 1 */
   texto?: string;
   hecho?: boolean;
+  prioridad?: TodoUpdatePrioridad;
 }
 
 export interface Error {

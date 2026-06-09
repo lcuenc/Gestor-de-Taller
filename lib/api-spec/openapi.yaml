@@ -647,30 +647,36 @@ components:
     Todo:
       type: object
       properties:
-        id:        { type: number }
-        texto:     { type: string }
-        hecho:     { type: boolean }
-        createdAt: { type: string }
-        updatedAt: { type: string }
+        id:          { type: number }
+        texto:       { type: string }
+        hecho:       { type: boolean }
+        prioridad:   { type: string, enum: [alta, media, baja] }
+        createdAt:   { type: string }
+        completedAt: { type: string, nullable: true }
+        updatedAt:   { type: string }
       required:
         - id
         - texto
         - hecho
+        - prioridad
         - createdAt
+        - completedAt
         - updatedAt
 
     TodoInput:
       type: object
       properties:
-        texto: { type: string, minLength: 1 }
+        texto:     { type: string, minLength: 1 }
+        prioridad: { type: string, enum: [alta, media, baja] }
       required:
         - texto
 
     TodoUpdate:
       type: object
       properties:
-        texto: { type: string, minLength: 1 }
-        hecho: { type: boolean }
+        texto:     { type: string, minLength: 1 }
+        hecho:     { type: boolean }
+        prioridad: { type: string, enum: [alta, media, baja] }
 
     Error:
       type: object

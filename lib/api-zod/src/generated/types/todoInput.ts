@@ -5,8 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { TodoInputPrioridad } from './todoInputPrioridad';
 
 export interface TodoInput {
   /** @minLength 1 */
   texto: string;
+  prioridad?: TodoInputPrioridad;
 }

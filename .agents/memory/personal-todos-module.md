@@ -15,6 +15,14 @@ authenticated user should always have. The sidebar filter is
 `n.id === "agenda" || can(n.id, "view")` — "agenda" is intentionally excluded from the
 `can()` gate. Do not add an "agenda" key to MODULES.
 
+# completedAt is transition-aware
+
+`PATCH /todos/:id` reads the current row first and only stamps `completedAt = now`
+on a real `false -> true` transition (and clears it on `true -> false`). Do NOT set
+it whenever `hecho:true` is merely present in the body — an idempotent re-send would
+overwrite the original completion time. Priority is whitelisted server-side
+(alta/media/baja), defaults to "media".
+
 # Técnicos management is admin-only
 
 Técnico list management is NOT a top-level module anymore. It lives as a subtab inside

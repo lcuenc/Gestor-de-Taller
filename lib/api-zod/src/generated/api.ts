@@ -218,7 +218,9 @@ export const ListTodosResponseItem = zod.object({
   "id": zod.number(),
   "texto": zod.string(),
   "hecho": zod.boolean(),
+  "prioridad": zod.enum(['alta', 'media', 'baja']),
   "createdAt": zod.string(),
+  "completedAt": zod.string().nullable(),
   "updatedAt": zod.string()
 })
 export const ListTodosResponse = zod.array(ListTodosResponseItem)
@@ -231,7 +233,8 @@ export const ListTodosResponse = zod.array(ListTodosResponseItem)
 
 
 export const CreateTodoBody = zod.object({
-  "texto": zod.string().min(1)
+  "texto": zod.string().min(1),
+  "prioridad": zod.enum(['alta', 'media', 'baja']).optional()
 })
 
 
@@ -247,14 +250,17 @@ export const UpdateTodoParams = zod.object({
 
 export const UpdateTodoBody = zod.object({
   "texto": zod.string().min(1).optional(),
-  "hecho": zod.boolean().optional()
+  "hecho": zod.boolean().optional(),
+  "prioridad": zod.enum(['alta', 'media', 'baja']).optional()
 })
 
 export const UpdateTodoResponse = zod.object({
   "id": zod.number(),
   "texto": zod.string(),
   "hecho": zod.boolean(),
+  "prioridad": zod.enum(['alta', 'media', 'baja']),
   "createdAt": zod.string(),
+  "completedAt": zod.string().nullable(),
   "updatedAt": zod.string()
 })
 
