@@ -1590,18 +1590,18 @@ function SortIcon({ col, sortCol, sortDir }: { col: string; sortCol: string; sor
 }
 
 // ── TallerPage ────────────────────────────────────────────────
-function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnicos, canCreate, canEdit, canDelete }: {
+function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, tecnicos, canCreate, canEdit, canDelete }: {
   equipos: Equipo[];
   onAdd: () => void;
   onEdit: (m: Equipo) => void;
   onDelete: (m: Equipo) => void;
   onListo: (m: Equipo) => void;
-  search: string;
   tecnicos: string[];
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
 }) {
+  const [q, setQ] = useState("");
   const [ef, setEf] = useState("Activos");
   const [df, setDf] = useState("Todos");
   const [tf, setTf] = useState("Todos");
@@ -1613,8 +1613,8 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
   const tecConEq = tecnicos.filter(t => ocup[t]);
 
   const fil = equipos.filter(m => {
-    const q = search.toLowerCase();
-    const mS = !q || [m.modelo, m.interno, m.accesorio, m.cliente, m.observacion, ...(m.tecnicos || [])].some(f => f?.toLowerCase().includes(q));
+    const ql = q.toLowerCase();
+    const mS = !ql || [m.modelo, m.interno, m.accesorio, m.cliente, m.observacion, ...(m.tecnicos || [])].some(f => f?.toLowerCase().includes(ql));
     const mE = ef === "Todos" ? true : ef === "Activos" ? ESTADOS_ACTIVOS.has(m.estado) : m.estado === ef;
     const mD = df === "Todos" || m.destino === df;
     const mT = tf === "Todos" || (m.tecnicos || []).includes(tf);
@@ -1699,6 +1699,20 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
       </div>
 
       <div className="fb">
+        <div className="srch" style={{ width: 196 }}>
+          <Ico n="filter" s={13} c="var(--t3)" />
+          <input
+            placeholder="Buscar equipo o accesorio…"
+            value={q}
+            onChange={e => setQ(e.target.value)}
+          />
+          {q && (
+            <button className="btni" style={{ padding: 2, marginRight: -2 }} onClick={() => setQ("")}>
+              <Ico n="x" s={11} />
+            </button>
+          )}
+        </div>
+        <div className="sep" />
         <Ico n="filter" s={12} c="var(--t3)" />
         <select className="fsel" value={ef} onChange={e => setEf(e.target.value)}>
           <option value="Activos">En taller</option>
@@ -1823,7 +1837,7 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, search, tecnico
 }
 
 // ── VentaPage ─────────────────────────────────────────────────
-function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, onAddGPV, onEditDisp, search, canCreate, canEdit, canDelete }: {
+function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, onAddGPV, onEditDisp, canCreate, canEdit, canDelete }: {
   disponibles: Equipo[];
   gpvList: GPVEntry[];
   onEntrega: (m: Equipo) => void;
@@ -1831,22 +1845,22 @@ function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, on
   onDeleteGPV: (g: GPVEntry) => void;
   onAddGPV: () => void;
   onEditDisp: (m: Equipo) => void;
-  search: string;
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
 }) {
+  const [q, setQ] = useState("");
   const [sub, setSub] = useState("disponibles");
   const [gf, setGf] = useState("Todos");
 
   const fD = disponibles.filter(m => {
-    const q = search.toLowerCase();
-    return !q || [m.modelo, m.interno, m.cliente].some(f => f?.toLowerCase().includes(q));
+    const ql = q.toLowerCase();
+    return !ql || [m.modelo, m.interno, m.cliente].some(f => f?.toLowerCase().includes(ql));
   });
 
   const fG = gpvList.filter(g => {
-    const q = search.toLowerCase();
-    const mS = !q || [g.modelo, g.interno, g.cliente].some(f => f?.toLowerCase().includes(q));
+    const ql = q.toLowerCase();
+    const mS = !ql || [g.modelo, g.interno, g.cliente].some(f => f?.toLowerCase().includes(ql));
     const r = dGPV(g.fechaEntrega);
     const mF = gf === "Todos" ? true : gf === "vigentes" ? r > 0 : gf === "vencer" ? r > 0 && r <= 15 : r <= 0;
     return mS && mF;
@@ -1859,6 +1873,20 @@ function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, on
       </div>
 
       <div className="fb">
+        <div className="srch" style={{ width: 180 }}>
+          <Ico n="filter" s={13} c="var(--t3)" />
+          <input
+            placeholder="Buscar…"
+            value={q}
+            onChange={e => setQ(e.target.value)}
+          />
+          {q && (
+            <button className="btni" style={{ padding: 2, marginRight: -2 }} onClick={() => setQ("")}>
+              <Ico n="x" s={11} />
+            </button>
+          )}
+        </div>
+        <div className="sep" />
         {[{ k: "disponibles", l: `Disponibles (${disponibles.length})` }, { k: "gpv", l: `GPV (${gpvList.length})` }].map(s => (
           <button key={s.k} className={`chip ${sub === s.k ? "on" : ""}`} onClick={() => setSub(s.k)}>{s.l}</button>
         ))}
@@ -4124,7 +4152,6 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [collapsed, setCol] = useState(false);
-  const [search, setSearch] = useState("");
   const [toasts, setToasts] = useState<{ id: number; msg: string; type: string }[]>([]);
   const [modal, setModal] = useState<{ type: string; item: Equipo | GPVEntry | null; canEdit?: boolean } | null>(null);
   const [modalE, setModalE] = useState<Equipo | null>(null);
@@ -4518,7 +4545,6 @@ export default function App() {
               {tab === "taller" && (
                 <TallerPage
                   equipos={equipos}
-                  search={search}
                   tecnicos={tecnicos}
                   canCreate={can("taller", "create")}
                   canEdit={can("taller", "edit")}
@@ -4533,7 +4559,6 @@ export default function App() {
                 <VentaPage
                   disponibles={disp}
                   gpvList={gpvList}
-                  search={search}
                   canCreate={can("venta", "create")}
                   canEdit={can("venta", "edit")}
                   canDelete={can("venta", "delete")}
