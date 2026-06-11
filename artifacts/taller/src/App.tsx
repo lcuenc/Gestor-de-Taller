@@ -929,7 +929,7 @@ function GlobalSearch({ equipos, onOpen }: { equipos: Equipo[]; onOpen: (e: Equi
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {e.modelo}
-                    {e.interno && <span style={{ fontSize: 11, color: "#8ab4f8", marginLeft: 6, fontFamily: "monospace", fontWeight: 600 }}>{e.interno}</span>}
+                    {e.interno && <span style={{ fontSize: 12, color: "#8ab4f8", marginLeft: 6, fontFamily: "monospace", fontWeight: 600 }}>{e.interno}</span>}
                   </div>
                   <div style={{ fontSize: 11, color: "var(--t3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {e.cliente || "Sin cliente"} · {e.estado}
@@ -1788,8 +1788,8 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, tecnicos, canCr
                       {(m.tipoActivo || "equipo") === "accesorio" && (
                         <span style={{ marginLeft: 6, fontSize: 9, padding: "1px 6px", borderRadius: 99, background: "rgba(16,185,129,.12)", color: "var(--em)", border: "1px solid rgba(16,185,129,.25)", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".3px", verticalAlign: "middle" }}>Accesorio</span>
                       )}
-                      {m.interno && <div style={{ fontSize: 11, color: "#8ab4f8", fontFamily: "monospace", fontWeight: 600 }}>{m.interno}</div>}
-                      {m.accesorio && <div style={{ fontSize: 11, color: "#8ab4f8", fontWeight: 600 }}>{m.accesorio}</div>}
+                      {m.interno && <div style={{ fontSize: 12, color: "#8ab4f8", fontFamily: "monospace", fontWeight: 600 }}>{m.interno}</div>}
+                      {m.accesorio && <div style={{ fontSize: 12, color: "#8ab4f8", fontWeight: 600 }}>{m.accesorio}</div>}
                     </td>
                     <td><DestBadge d={m.destino} /></td>
                     <td style={{ fontSize: 13 }}>{m.cliente || <span style={{ color: "var(--t3)" }}>—</span>}</td>
@@ -1916,7 +1916,7 @@ function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, on
                   <tr key={m.id}>
                     <td>
                       <span style={{ fontWeight: 700, fontSize: 13 }}>{m.modelo}</span>
-                      {m.interno && <div style={{ fontSize: 11, color: "#8ab4f8", fontFamily: "monospace", fontWeight: 600 }}>{m.interno}</div>}
+                      {m.interno && <div style={{ fontSize: 12, color: "#8ab4f8", fontFamily: "monospace", fontWeight: 600 }}>{m.interno}</div>}
                     </td>
                     <td style={{ fontSize: 12, color: "var(--t3)" }}>{m.accesorio || "—"}</td>
                     <td style={{ fontSize: 12, color: "var(--t2)" }}>{m.cliente || "—"}</td>
@@ -1956,7 +1956,7 @@ function VentaPage({ disponibles, gpvList, onEntrega, onEditGPV, onDeleteGPV, on
                   <tr key={g.id}>
                     <td>
                       <span style={{ fontWeight: 700, fontSize: 13 }}>{g.modelo}</span>
-                      {g.interno && <div style={{ fontSize: 11, color: "#8ab4f8", fontFamily: "monospace", fontWeight: 600 }}>{g.interno}</div>}
+                      {g.interno && <div style={{ fontSize: 12, color: "#8ab4f8", fontFamily: "monospace", fontWeight: 600 }}>{g.interno}</div>}
                     </td>
                     <td style={{ fontSize: 13 }}>{g.cliente || <span style={{ color: "var(--t3)" }}>—</span>}</td>
                     <td style={{ fontSize: 11, fontFamily: "monospace", color: "var(--t3)" }}>{g.fechaEntrega}</td>
