@@ -1756,9 +1756,7 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, tecnicos, canCr
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>Estado <SortIcon col="estado" sortCol={sortCol} sortDir={sortDir} /></div>
                 </th>
                 <th>Técnicos</th>
-                <th {...thProps("fechaIngreso")}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>Ingreso <SortIcon col="fechaIngreso" sortCol={sortCol} sortDir={sortDir} /></div>
-                </th>
+
                 <th {...thProps("dias")}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>Días <SortIcon col="dias" sortCol={sortCol} sortDir={sortDir} /></div>
                 </th>
@@ -1795,7 +1793,7 @@ function TallerPage({ equipos, onAdd, onEdit, onDelete, onListo, tecnicos, canCr
                     <td style={{ fontSize: 13 }}>{m.cliente || <span style={{ color: "var(--t3)" }}>—</span>}</td>
                     <td><StBadge s={m.estado} /></td>
                     <td style={{ minWidth: 120 }}><TecChips tecnicos={m.tecnicos} /></td>
-                    <td style={{ fontSize: 11, fontFamily: "monospace", color: "var(--t3)" }}>{m.fechaIngreso}</td>
+
                     <td>
                       <span style={{ fontSize: 13, fontWeight: 700, color: diasColor }}>
                         {dias}d
