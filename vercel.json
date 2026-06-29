@@ -1,4 +1,4 @@
 {
-  "installCommand": "pnpm install --no-frozen-lockfile",
-  "buildCommand": "pnpm run build"
+  "installCommand": "cd ../.. && pnpm install --no-frozen-lockfile",
+  "buildCommand": "node ./build.mjs"
 }
