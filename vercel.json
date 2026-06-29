@@ -1,5 +1,3 @@
 {
-  "installCommand": "pnpm install --no-frozen-lockfile",
-  "buildCommand": "node ./build.mjs",
-  "outputDirectory": "dist"
+  "installCommand": "pnpm install --no-frozen-lockfile"
 }
